@@ -1,5 +1,6 @@
 # backend/app/config.py
-from pydantic_settings import BaseSettings
+from functools import lru_cache
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     database_url: str
@@ -19,7 +20,8 @@ class Settings(BaseSettings):
     apify_api_token: str
     extension_version: str = "1.0.0"
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(env_file=".env")
 
-settings = Settings()
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
