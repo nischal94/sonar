@@ -12,7 +12,7 @@
 ### First-time setup
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/sonar.git
+git clone https://github.com/nischal94/sonar.git
 cd sonar
 cp .env.example .env
 # Edit .env with your API keys
@@ -149,9 +149,6 @@ sonar/
 ├── backend/         # FastAPI + Celery + PostgreSQL (see backend/README.md)
 ├── extension/       # Chrome MV3 extension (see extension/README.md)
 ├── frontend/        # React 18 + Vite dashboard (see frontend/README.md)
-├── docs/
-│   ├── specs/       # Product design specifications
-│   └── plans/       # Implementation plans
 ├── docker-compose.yml
 ├── .env.example
 ├── README.md
