@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update as sa_update
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 from datetime import datetime, timedelta, timezone
@@ -64,6 +65,25 @@ async def register(body: WorkspaceRegister, db: AsyncSession = Depends(get_db)):
     await db.commit()
 
     return WorkspaceResponse(workspace_id=workspace.id, user_id=user.id, email=user.email)
+
+
+class ChannelUpdateRequest(BaseModel):
+    delivery_channels: dict
+
+
+@workspace_router.patch("/channels", status_code=200)
+async def update_channels(
+    body: ChannelUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    await db.execute(
+        sa_update(Workspace)
+        .where(Workspace.id == current_user.workspace_id)
+        .values(delivery_channels=body.delivery_channels)
+    )
+    await db.commit()
+    return {"message": "Channels updated."}
 
 
 @router.post("/token", response_model=TokenResponse)
