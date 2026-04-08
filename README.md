@@ -1,10 +1,23 @@
 # Sonar
 
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python](https://img.shields.io/badge/python-3.12-blue.svg)
+![Node](https://img.shields.io/badge/node-20+-green.svg)
+![Status](https://img.shields.io/badge/phase-1%20complete-brightgreen.svg)
+
 **Network-aware LinkedIn intent intelligence for B2B revenue teams.**
 
-Sonar monitors your LinkedIn network in real time, detects intent signals the moment they surface, and delivers prioritized alerts with AI-drafted outreach — so you spend zero time finding opportunities and 100% of your time closing them.
+---
 
-> The key insight: every existing tool (Trigify, Octolens, Intently) monitors the public LinkedIn feed — millions of strangers. Sonar monitors *your* network. A warm signal from someone who already knows you is worth 10× a cold signal from a stranger.
+### Why Sonar?
+
+Every day, people in your LinkedIn network post about problems your business solves. Someone struggling with AI integration. A founder evaluating new tooling. A CTO venting about a broken process. By the time you see it, the window has closed and someone else moved in.
+
+Sonar watches your network for you — 24/7 — and the moment a signal surfaces, it delivers a prioritized alert with AI-drafted outreach so you can act in seconds, not days.
+
+> **The key insight:** every competitor (Trigify, Octolens, Intently) monitors the public LinkedIn feed — millions of strangers. Sonar monitors *your* network. A warm signal from someone who already knows you is worth 10× a cold signal from a stranger. That's the moat.
+
+Sonar monitors your LinkedIn network in real time, detects intent signals the moment they surface, and delivers prioritized alerts with AI-drafted outreach — so you spend zero time finding opportunities and 100% of your time closing them.
 
 ---
 
@@ -126,7 +139,7 @@ Thresholds auto-adjust based on your feedback: if fewer than 40% of recent alert
 ### 1. Clone and configure
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/sonar.git
+git clone https://github.com/nischal94/sonar.git
 cd sonar
 cp .env.example .env
 ```
@@ -171,7 +184,8 @@ http://localhost:5173          → React onboarding page
 
 ### 5. Install the Chrome extension
 
-See [extension/README.md](extension/README.md).
+The extension is currently an unpacked developer install (no Chrome Web Store listing yet).
+See [extension/README.md](extension/README.md) for step-by-step instructions.
 
 ---
 
@@ -269,9 +283,6 @@ sonar/
 │   └── pyproject.toml
 ├── extension/                   # Chrome MV3 extension
 ├── frontend/                    # React 18 + Vite dashboard
-├── docs/
-│   ├── specs/                   # Product design spec
-│   └── plans/                   # Phase 1 implementation plan
 ├── docker-compose.yml
 └── .env.example
 ```
@@ -303,6 +314,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 | Phase 2 | Planned | Network map, trending topics, weekly intelligence brief |
 | Phase 3 | Planned | Full relationship memory, CRM sync, account-level scoring |
 | Phase 4 | Planned | White-label API, enterprise, predictive conversion scoring |
+
+---
+
+## Self-Hosting
+
+Sonar is fully self-hostable. Everything you need is in this repo: the backend, the Chrome extension, and the dashboard. Bring your own API keys and run `docker compose up`.
+
+There is no hosted SaaS version yet. If you're interested in a managed version — where you don't need to run infrastructure or manage API keys — watch this repo or open an issue.
 
 ---
 
