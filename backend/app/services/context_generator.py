@@ -1,0 +1,73 @@
+import json
+from dataclasses import dataclass
+from app.services.llm import openai_provider, groq_provider
+from app.services.scorer import Priority
+
+CONTEXT_GENERATION_PROMPT = """
+You are a B2B sales intelligence assistant.
+
+COMPANY CAPABILITY PROFILE:
+{capability_profile}
+
+LINKEDIN POST:
+Author: {author_name}, {author_headline} at {author_company}
+Connection degree: {degree}
+Company context: {enrichment_summary}
+Post content: {post_content}
+
+Return a JSON object with exactly these fields:
+- match_reason: 2 sentences max. Why is this post relevant to the company's capabilities? Be specific — reference both the post and what the company does.
+- outreach_draft_a: A Direct style LinkedIn message. Max 4 sentences. Reference the specific post. No emojis, no "I hope this finds you well." Sound like a human.
+- outreach_draft_b: A Question-led style LinkedIn message. Opens with a curious question about their specific situation. Max 3 sentences.
+- opportunity_type: exactly one of: service_need, product_pain, hiring_signal, funding_signal, competitive_mention, general_interest
+- urgency_reason: One sentence on why timing matters for this specific signal.
+
+Valid JSON only. No preamble, no markdown fences.
+"""
+
+
+@dataclass
+class AlertContext:
+    match_reason: str
+    outreach_draft_a: str
+    outreach_draft_b: str
+    opportunity_type: str
+    urgency_reason: str
+
+
+async def generate_alert_context(
+    post_content: str,
+    author_name: str,
+    author_headline: str,
+    author_company: str,
+    degree: int,
+    enrichment_summary: str,
+    capability_profile: str,
+    priority: Priority,
+) -> AlertContext:
+    """
+    Generate match reason and two outreach draft variants using LLM.
+    Routes to GPT-4o mini for HIGH priority, Groq for MEDIUM/LOW.
+    """
+    prompt = CONTEXT_GENERATION_PROMPT.format(
+        capability_profile=capability_profile,
+        author_name=author_name,
+        author_headline=author_headline,
+        author_company=author_company,
+        degree=degree,
+        enrichment_summary=enrichment_summary or "No enrichment data available.",
+        post_content=post_content[:1000],  # cap to avoid token overflow
+    )
+
+    if priority == Priority.HIGH:
+        raw = await openai_provider.complete(prompt=prompt, model="gpt-4o-mini")
+    else:
+        raw = await groq_provider.complete(prompt=prompt, model="llama-3.3-70b-versatile")
+
+    # Strip markdown fences if present
+    raw = raw.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
+
+    data = json.loads(raw)
+    return AlertContext(**data)
