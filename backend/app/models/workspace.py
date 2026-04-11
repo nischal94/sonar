@@ -19,6 +19,7 @@ class Workspace(Base):
     onboarding_url = Column(String)
     onboarding_doc_path = Column(String)
     created_at = Column(TIMESTAMPTZ, nullable=False, server_default="now()")
+    backfill_used = Column(Boolean, nullable=False, default=False)
 
     users = relationship("User", back_populates="workspace")
     capability_versions = relationship("CapabilityProfileVersion", back_populates="workspace")

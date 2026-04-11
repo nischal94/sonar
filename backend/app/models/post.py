@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, Boolean, Text, UniqueConstraint
+from sqlalchemy import Column, String, Float, Boolean, Text, UniqueConstraint, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
 from app.models._types import TIMESTAMPTZ
 from pgvector.sqlalchemy import Vector
@@ -12,7 +12,7 @@ class Post(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     workspace_id = Column(UUID(as_uuid=True), nullable=False)
-    connection_id = Column(UUID(as_uuid=True))
+    connection_id = Column(UUID(as_uuid=True), ForeignKey("connections.id"))
     linkedin_post_id = Column(String, nullable=False)
     content = Column(Text, nullable=False)
     post_type = Column(String, nullable=False)
