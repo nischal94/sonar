@@ -1,5 +1,6 @@
 from sqlalchemy import Column, String, Float, Boolean, Integer, ARRAY, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID, JSONB, TIMESTAMPTZ
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from app.models._types import TIMESTAMPTZ
 import uuid
 from app.database import Base
 

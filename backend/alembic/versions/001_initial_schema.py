@@ -26,7 +26,7 @@ def upgrade():
         sa.Column("delivery_channels", postgresql.JSONB(), server_default="{}"),
         sa.Column("onboarding_url", sa.String()),
         sa.Column("onboarding_doc_path", sa.String()),
-        sa.Column("created_at", postgresql.TIMESTAMPTZ(), nullable=False, server_default=sa.text("now()")),
+        sa.Column("created_at", postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
     )
 
     op.create_table("capability_profile_versions",
@@ -39,7 +39,7 @@ def upgrade():
         sa.Column("anti_keywords", postgresql.ARRAY(sa.Text())),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default="true"),
         sa.Column("performance_score", sa.Float()),
-        sa.Column("created_at", postgresql.TIMESTAMPTZ(), nullable=False, server_default=sa.text("now()")),
+        sa.Column("created_at", postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"]),
     )
     op.execute("ALTER TABLE capability_profile_versions ADD COLUMN embedding vector(1536)")
@@ -55,9 +55,9 @@ def upgrade():
         sa.Column("alert_rate_limits", postgresql.JSONB(), server_default='{"high":10,"medium":5,"low":2}'),
         sa.Column("quiet_hours", postgresql.JSONB(), server_default="{}"),
         sa.Column("extension_installed", sa.Boolean(), nullable=False, server_default="false"),
-        sa.Column("extension_last_sync", postgresql.TIMESTAMPTZ()),
+        sa.Column("extension_last_sync", postgresql.TIMESTAMP(timezone=True)),
         sa.Column("timezone", sa.String(), nullable=False, server_default="UTC"),
-        sa.Column("created_at", postgresql.TIMESTAMPTZ(), nullable=False, server_default=sa.text("now()")),
+        sa.Column("created_at", postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"]),
     )
 
@@ -74,9 +74,9 @@ def upgrade():
         sa.Column("degree", sa.Integer(), nullable=False),
         sa.Column("relationship_score", sa.Float(), nullable=False, server_default="0.5"),
         sa.Column("has_interacted", sa.Boolean(), nullable=False, server_default="false"),
-        sa.Column("first_seen_at", postgresql.TIMESTAMPTZ(), nullable=False, server_default=sa.text("now()")),
-        sa.Column("last_active_at", postgresql.TIMESTAMPTZ()),
-        sa.Column("enriched_at", postgresql.TIMESTAMPTZ()),
+        sa.Column("first_seen_at", postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("last_active_at", postgresql.TIMESTAMP(timezone=True)),
+        sa.Column("enriched_at", postgresql.TIMESTAMP(timezone=True)),
         sa.Column("enrichment_data", postgresql.JSONB(), server_default="{}"),
         sa.Column("topic_interests", postgresql.ARRAY(sa.Text())),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"]),
@@ -91,14 +91,14 @@ def upgrade():
         sa.Column("content", sa.Text(), nullable=False),
         sa.Column("post_type", sa.String(), nullable=False),
         sa.Column("source", sa.String(), nullable=False),
-        sa.Column("posted_at", postgresql.TIMESTAMPTZ()),
-        sa.Column("ingested_at", postgresql.TIMESTAMPTZ(), nullable=False, server_default=sa.text("now()")),
+        sa.Column("posted_at", postgresql.TIMESTAMP(timezone=True)),
+        sa.Column("ingested_at", postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.Column("relevance_score", sa.Float()),
         sa.Column("relationship_score", sa.Float()),
         sa.Column("timing_score", sa.Float()),
         sa.Column("combined_score", sa.Float()),
         sa.Column("matched", sa.Boolean(), nullable=False, server_default="false"),
-        sa.Column("processed_at", postgresql.TIMESTAMPTZ()),
+        sa.Column("processed_at", postgresql.TIMESTAMP(timezone=True)),
         sa.Column("extraction_version", sa.String()),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"]),
         sa.UniqueConstraint("workspace_id", "linkedin_post_id"),
@@ -122,11 +122,11 @@ def upgrade():
         sa.Column("opportunity_type", sa.String()),
         sa.Column("urgency_reason", sa.Text()),
         sa.Column("status", sa.String(), nullable=False, server_default="pending"),
-        sa.Column("delivered_at", postgresql.TIMESTAMPTZ()),
-        sa.Column("seen_at", postgresql.TIMESTAMPTZ()),
+        sa.Column("delivered_at", postgresql.TIMESTAMP(timezone=True)),
+        sa.Column("seen_at", postgresql.TIMESTAMP(timezone=True)),
         sa.Column("feedback", sa.String()),
-        sa.Column("feedback_at", postgresql.TIMESTAMPTZ()),
-        sa.Column("created_at", postgresql.TIMESTAMPTZ(), nullable=False, server_default=sa.text("now()")),
+        sa.Column("feedback_at", postgresql.TIMESTAMP(timezone=True)),
+        sa.Column("created_at", postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"]),
         sa.ForeignKeyConstraint(["post_id"], ["posts.id"]),
         sa.ForeignKeyConstraint(["connection_id"], ["connections.id"]),
@@ -140,8 +140,8 @@ def upgrade():
         sa.Column("message_sent", sa.Text()),
         sa.Column("outcome", sa.String()),
         sa.Column("notes", sa.Text()),
-        sa.Column("contacted_at", postgresql.TIMESTAMPTZ(), nullable=False, server_default=sa.text("now()")),
-        sa.Column("updated_at", postgresql.TIMESTAMPTZ(), nullable=False, server_default=sa.text("now()")),
+        sa.Column("contacted_at", postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"]),
     )
 
@@ -153,7 +153,7 @@ def upgrade():
         sa.Column("new_threshold", sa.Float(), nullable=False),
         sa.Column("positive_rate", sa.Float(), nullable=False),
         sa.Column("adjustment_reason", sa.String()),
-        sa.Column("created_at", postgresql.TIMESTAMPTZ(), nullable=False, server_default=sa.text("now()")),
+        sa.Column("created_at", postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"]),
     )
 
@@ -167,7 +167,7 @@ def upgrade():
         sa.Column("outreach_outcome", sa.String()),
         sa.Column("revenue_attributed", sa.Numeric(10, 2)),
         sa.Column("effectiveness_score", sa.Float()),
-        sa.Column("created_at", postgresql.TIMESTAMPTZ(), nullable=False, server_default=sa.text("now()")),
+        sa.Column("created_at", postgresql.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"]),
     )
 
