@@ -76,6 +76,25 @@ async def test_router_skips_channel_below_min_priority():
 
 
 @pytest.mark.asyncio
+async def test_router_propagates_cancellation():
+    """A CancelledError raised by a sender must propagate out of `deliver()`
+    instead of being silently swallowed. Closes #25. Without this, an outer
+    task that was cancelled (Celery worker shutdown, asyncio.wait_for) would
+    continue as if delivery succeeded."""
+    import asyncio
+    alert = make_alert(priority="high")
+    workspace = make_workspace_with_slack()
+
+    cancelling_instance = MagicMock()
+    cancelling_instance.send = AsyncMock(side_effect=asyncio.CancelledError())
+    cancelling_class = MagicMock(return_value=cancelling_instance)
+
+    router = DeliveryRouter(senders={"slack": cancelling_class})
+    with pytest.raises(asyncio.CancelledError):
+        await router.deliver(alert=alert, workspace=workspace)
+
+
+@pytest.mark.asyncio
 async def test_router_logs_channel_failure_and_continues_siblings(caplog):
     """A failing sender must not cancel sibling channels, and its exception
     must be logged with channel + alert_id + workspace_id context instead of

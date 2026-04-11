@@ -4,7 +4,10 @@ End-to-end integration test: register → profile → ingest → alert created.
 Runs against test database. Mocks LLM and delivery channels.
 """
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
+from app.main import app
+from app.services.embedding import get_embedding_provider
+from app.services.llm import get_llm_client
 
 
 @pytest.mark.asyncio
@@ -46,21 +49,24 @@ async def test_full_pipeline_end_to_end(client):
         "capability_summary": "We build custom AI agents for SaaS automation."
     }'''
 
-    # Patch where the names are looked up, not where they're defined:
-    # `app.routers.profile` does `from app.services.embedding import embedding_provider`
-    # at import time, so patching `app.services.embedding.embedding_provider` does not
-    # affect the router's local binding. Same rule applies to `llm_client` in
-    # `profile_extractor`, which already uses the correct path.
-    with patch("app.services.profile_extractor.llm_client") as mock_llm, \
-         patch("app.routers.profile.embedding_provider") as mock_emb:
-        mock_llm.complete = AsyncMock(return_value=mock_profile_json)
-        mock_emb.embed = AsyncMock(return_value=[0.5] * 1536)
-
+    # FastAPI dependency overrides instead of patch() — impossible to defeat
+    # with `from ... import ...` because the override layer sits above
+    # Python's import binding. See #21.
+    fake_llm = MagicMock()
+    fake_llm.complete = AsyncMock(return_value=mock_profile_json)
+    fake_emb = MagicMock()
+    fake_emb.embed = AsyncMock(return_value=[0.5] * 1536)
+    app.dependency_overrides[get_llm_client] = lambda: fake_llm
+    app.dependency_overrides[get_embedding_provider] = lambda: fake_emb
+    try:
         resp = await client.post("/profile/extract", json={
             "text": "We build custom AI agents for SaaS companies."
         }, headers=headers)
         assert resp.status_code == 200
         assert resp.json()["company_name"] == "E2E Test Agency"
+    finally:
+        app.dependency_overrides.pop(get_llm_client, None)
+        app.dependency_overrides.pop(get_embedding_provider, None)
 
     # Step 4: Ingest a post (pipeline task mocked — tested separately in test_ingest_router.py)
     with patch("app.routers.ingest.process_post_pipeline") as mock_task:

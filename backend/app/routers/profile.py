@@ -8,7 +8,8 @@ from app.models.workspace import Workspace, CapabilityProfileVersion
 from app.models.user import User
 from app.routers.auth import get_current_user
 from app.services.profile_extractor import extract_capability_profile
-from app.services.embedding import embedding_provider
+from app.services.embedding import EmbeddingProvider, get_embedding_provider
+from app.services.llm import LLMProvider, get_llm_client
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -30,6 +31,8 @@ async def extract_profile(
     body: ProfileExtractRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    emb: EmbeddingProvider = Depends(get_embedding_provider),
+    llm: LLMProvider = Depends(get_llm_client),
 ):
     if not body.url and not body.text:
         raise HTTPException(status_code=400, detail="Provide url or text")
@@ -37,9 +40,10 @@ async def extract_profile(
     profile = await extract_capability_profile(
         text=body.text,
         url=str(body.url) if body.url else None,
+        llm_override=llm,
     )
 
-    embedding = await embedding_provider.embed(profile.capability_summary)
+    embedding = await emb.embed(profile.capability_summary)
 
     # Deactivate previous active version
     await db.execute(
