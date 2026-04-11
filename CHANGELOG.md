@@ -2,6 +2,93 @@
 
 All notable changes to Sonar are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
+## [0.2.0](https://github.com/nischal94/sonar/compare/v0.1.0...v0.2.0) (2026-04-11)
+
+
+### 🚀 Added
+
+* add 3-dimension scoring engine with priority bucketing ([2313f8c](https://github.com/nischal94/sonar/commit/2313f8cda2bae411b48436054984f83e94bb7a98))
+* add alerts API with feedback endpoint and threshold adjustment ([3ac74f8](https://github.com/nischal94/sonar/commit/3ac74f887e2ed8bf8a1fbb289942db174af150db))
+* add Apify public post poller and email digest sender ([1c6c448](https://github.com/nischal94/sonar/commit/1c6c448a5e438e75f46e484224e387d5732b8cd3))
+* add capability profile extraction with LLM and embedding storage ([9c44b99](https://github.com/nischal94/sonar/commit/9c44b995a4a591d8488319e730b384e7000ecaab))
+* add Celery pipeline and ingest API endpoint ([7e80494](https://github.com/nischal94/sonar/commit/7e80494be78aeb7354e6c42df3d25097abf3e6b4))
+* add Chrome extension with LinkedIn feed sync and popup UI ([4543d86](https://github.com/nischal94/sonar/commit/4543d86a37b0c5c47159bfb3c4b178de520c96fd))
+* add database models and initial Alembic migration ([9aa295d](https://github.com/nischal94/sonar/commit/9aa295d0410a449f204192a222f927ba6d172cd3))
+* add delivery router with Slack, email, Telegram, and WhatsApp channels ([7030b41](https://github.com/nischal94/sonar/commit/7030b41318414b16435086ecb6af898fd86087a0))
+* add JWT auth with workspace registration and login ([b18c4eb](https://github.com/nischal94/sonar/commit/b18c4ebc85b65e06b72f622f5cc29734e505aca6))
+* add keyword pre-filter and semantic similarity matcher ([138e021](https://github.com/nischal94/sonar/commit/138e021049986b909ea4905da1c0d3ef10b578cb))
+* add LLM context generator with model routing by priority ([38b9afb](https://github.com/nischal94/sonar/commit/38b9afbe3e5f2e9839b119da7730e3eea87912ff))
+* add React dashboard with alert feed, opportunity board, and settings ([329eec2](https://github.com/nischal94/sonar/commit/329eec2fefafe58a85a0503a437989912bb45a47))
+* complete Sonar Phase 1 MVP — full stack end-to-end ([6efe1b0](https://github.com/nischal94/sonar/commit/6efe1b041fcf2ddd98722ec7551a2333d9e416fd))
+* initial Sonar project — spec and implementation plan ([be01318](https://github.com/nischal94/sonar/commit/be013188571abd72ff0e270babc9218eea84498b))
+* Phase 2 Foundation — data model, Ring 1/2 matching, pipeline refactor ([#10](https://github.com/nischal94/sonar/issues/10)) ([f62d6cb](https://github.com/nischal94/sonar/commit/f62d6cbc14a2d9a414e73a7fc79392db8ab6315b))
+* scaffold project with Docker Compose and FastAPI ([5621de0](https://github.com/nischal94/sonar/commit/5621de0c76c9f0a50541e3b7dae981c80d0f9369))
+
+
+### 🐛 Fixed
+
+* add postgres healthcheck and use lru_cache settings pattern ([20a6f68](https://github.com/nischal94/sonar/commit/20a6f689f0b2ea684ed8cfd9765add6ea34618c1))
+* **auth:** require explicit exp/sub claims in jwt.decode ([#15](https://github.com/nischal94/sonar/issues/15)) ([bf709c4](https://github.com/nischal94/sonar/commit/bf709c446a3845f4d205671650904463f70402cb)), closes [#7](https://github.com/nischal94/sonar/issues/7)
+* bump axios to 1.15.0 to patch CVE-2026-40175 and CVE-2025-62718 ([b4cd498](https://github.com/nischal94/sonar/commit/b4cd498ea34c8e9c30d5e03bc589158749966e13))
+* bump vite to 6.4.2 to patch path traversal vulnerability (CVE moderate) ([182c9ed](https://github.com/nischal94/sonar/commit/182c9ed66c0ffd4aaccb430e8f956e54b4a5ea26))
+* **db:** add missing FK on connections.user_id ([#19](https://github.com/nischal94/sonar/issues/19)) ([5f2b367](https://github.com/nischal94/sonar/commit/5f2b3673bbe0208323cfbf1deaf06c2b41c7f41f))
+* **delivery:** log asyncio.gather failures in DeliveryRouter.deliver ([#24](https://github.com/nischal94/sonar/issues/24)) ([560e282](https://github.com/nischal94/sonar/commit/560e2822e79249b2c789085e1d2618e6fdc63dbf))
+* **deps:** pin bcrypt&lt;4.1 to work around passlib incompatibility ([#12](https://github.com/nischal94/sonar/issues/12)) ([34d2add](https://github.com/nischal94/sonar/commit/34d2adda2c0dd9aeeb4f8cb629e51753a7091caa)), closes [#5](https://github.com/nischal94/sonar/issues/5)
+* make Phase 1 dev environment actually runnable ([5e190f9](https://github.com/nischal94/sonar/commit/5e190f95345e6aabd447e1642c373437fe997cf8))
+* migrate JWT from python-jose to PyJWT to drop ecdsa timing attack dep ([#4](https://github.com/nischal94/sonar/issues/4)) ([935e330](https://github.com/nischal94/sonar/commit/935e3307a56f023331fb777d91813b915ab18fe3))
+* **models:** add ForeignKey constraints to Connection.workspace_id and user_id ([#13](https://github.com/nischal94/sonar/issues/13)) ([207b207](https://github.com/nischal94/sonar/commit/207b207b5a8533e763e20ab96119aeb1ee6b56b2)), closes [#8](https://github.com/nischal94/sonar/issues/8)
+* regenerate frontend lockfile to resolve axios CVEs ([1959c2b](https://github.com/nischal94/sonar/commit/1959c2bcc473459f1d41fc2c8a53225e2378d12e))
+* resolve all Phase 1 blockers and critical bugs from code review ([2075568](https://github.com/nischal94/sonar/commit/2075568e33f78226b764bf22824c8c5b5e2d9f74))
+* **tests:** patch CHANNEL_SENDERS dict for Slack router tests ([#16](https://github.com/nischal94/sonar/issues/16)) ([398c3db](https://github.com/nischal94/sonar/commit/398c3db74b5a7cb5799da8778f9af008d8e0f497)), closes [#6](https://github.com/nischal94/sonar/issues/6)
+* **tests:** patch embedding_provider where it is looked up in profile router ([#20](https://github.com/nischal94/sonar/issues/20)) ([1da10a9](https://github.com/nischal94/sonar/commit/1da10a9f363dc617be6d353c25c63f1df58d376c)), closes [#11](https://github.com/nischal94/sonar/issues/11)
+
+
+### 🧹 Changed
+
+* **delivery:** constructor-inject sender registry into DeliveryRouter ([#23](https://github.com/nischal94/sonar/issues/23)) ([79af5bb](https://github.com/nischal94/sonar/commit/79af5bb48885aaf049a83aa641851c82e90b020d))
+
+
+### 📚 Documentation
+
+* add comprehensive project documentation ([e9f512c](https://github.com/nischal94/sonar/commit/e9f512c6540204f0ff9ab8d03e95bbd3d2afb479))
+* add Phase 2 network intelligence design spec ([fda9a25](https://github.com/nischal94/sonar/commit/fda9a2551a0ce125c96cc46646d3fbbcd81aa5f8))
+* **changelog:** backfill PRs [#10](https://github.com/nischal94/sonar/issues/10), [#12](https://github.com/nischal94/sonar/issues/12)-[#24](https://github.com/nischal94/sonar/issues/24) under [Unreleased] ([#26](https://github.com/nischal94/sonar/issues/26)) ([334904b](https://github.com/nischal94/sonar/commit/334904b1cb28fd259a54d7d606ba01546098b687))
+* **claude.md:** add Engineering Standards section + link known bugs to issues ([1b2d350](https://github.com/nischal94/sonar/commit/1b2d3503cd998d734f3ccf157549fa356c3702d2))
+* **claude.md:** add Lessons Learned — Python DI, asyncio.gather, frontend deps ([ab91c1f](https://github.com/nischal94/sonar/commit/ab91c1f5bbaac62c2d4365fa6ca75f112da87a21))
+* **phase-2/foundation:** add FK constraints on person_signal_summary.recent_post_id and recent_signal_id per design spec ([7ea63dc](https://github.com/nischal94/sonar/commit/7ea63dcc1cc863a04f765356dd70cc9a917592ae))
+* **phase-2/foundation:** switch shell commands to docker compose exec ([0c012ce](https://github.com/nischal94/sonar/commit/0c012ced45bab924b7e7e2ffb0de0ed035f55e93))
+* **phase-2:** Foundation implementation plan ([#3](https://github.com/nischal94/sonar/issues/3)) ([385eade](https://github.com/nischal94/sonar/commit/385eade9b30676b83eaeed8129972578332b3f0e))
+* polish README with badges, why section, correct URLs, and self-hosting note ([fbf715b](https://github.com/nischal94/sonar/commit/fbf715b4527830a420a0ba3a90b12ff1fb9281b5))
+* rebuild CLAUDE.md comprehensively + add CHANGELOG ([1a2ae5d](https://github.com/nischal94/sonar/commit/1a2ae5d2480219a16abb83393ccd4ef438e5b5b4))
+* refresh README + add SECURITY.md (full audit fixes) ([f261842](https://github.com/nischal94/sonar/commit/f2618420b6a4cd223d7025becd525e35371ec6a0))
+* rename Phase 2 plans to implementation-&lt;feature&gt;.md for nomenclature consistency with Phase 1 ([27ddf06](https://github.com/nischal94/sonar/commit/27ddf063e4603786f7503c2ac86bbfbd9c44f048))
+* restore archived Sonar product design and Phase 1 plan ([29f4751](https://github.com/nischal94/sonar/commit/29f47514a081881ad243a428d62e9f447d73ab7e))
+* **todo:** rewrite as comprehensive session-handoff doc ([4ef0fa1](https://github.com/nischal94/sonar/commit/4ef0fa1cbf80a9edddfca87aeb8adf7e33f0dd61))
+
+
+### 🧪 Tests
+
+* add end-to-end integration test for full pipeline ([36531e1](https://github.com/nischal94/sonar/commit/36531e18286d850746f297e212c8cfa729c78aef))
+
+
+### 🔧 CI/CD
+
+* replace release-drafter with release-please for in-repo CHANGELOG automation ([96b2338](https://github.com/nischal94/sonar/commit/96b2338d2c6d16e6d28049f8f93569eb1c59e4e1))
+
+
+### 🔧 Chores
+
+* add .gitignore with .worktrees exclusion ([8d8332c](https://github.com/nischal94/sonar/commit/8d8332c7f32e2c99438d6e9b9de93dc4ccc14e54))
+* add CLAUDE.md and flatten docs structure ([80006ca](https://github.com/nischal94/sonar/commit/80006cab212e6584f472d3cf17c116f2742e9400))
+* add MIT license file ([a4c49a7](https://github.com/nischal94/sonar/commit/a4c49a793d57711989f04f77ae9fe80011636296))
+* add package-lock.json with vite 6.4.2 resolved ([22ce318](https://github.com/nischal94/sonar/commit/22ce31895c5dbcd9b7ec940600b9062881bc71dd))
+* add TODO.md with env setup checklist ([6fcee4f](https://github.com/nischal94/sonar/commit/6fcee4f7580b3b3088b4b09243d77a04d0634eae))
+* **ci:** scaffold .github — release-drafter, PR/issue templates, dependabot ([#27](https://github.com/nischal94/sonar/issues/27)) ([e1dd79f](https://github.com/nischal94/sonar/commit/e1dd79f4cc286392e29276a9686e11b639d6e102))
+* clear follow-up issues [#21](https://github.com/nischal94/sonar/issues/21), [#22](https://github.com/nischal94/sonar/issues/22), [#25](https://github.com/nischal94/sonar/issues/25) ([#39](https://github.com/nischal94/sonar/issues/39)) ([b9b26c8](https://github.com/nischal94/sonar/commit/b9b26c8f5a398967eaca2386b141448918dc4216))
+* **deps:** sync uv.lock with pyjwt/pydantic-settings lower-bound bumps (PRs [#31](https://github.com/nischal94/sonar/issues/31), [#32](https://github.com/nischal94/sonar/issues/32)) ([12af60d](https://github.com/nischal94/sonar/commit/12af60d13459027e9cd2099fde6fdb7b77b36989))
+* exclude internal docs from public repo ([58526ab](https://github.com/nischal94/sonar/commit/58526ab342fbb7f0025dff3315cf54fe1b5d8fb2))
+* gitignore .superpowers/ brainstorming session directory ([5122e39](https://github.com/nischal94/sonar/commit/5122e393f4b04bf75378f1dd35ded353f3e3b436))
+
 ## [Unreleased]
 
 ### Added
