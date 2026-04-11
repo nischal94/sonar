@@ -200,6 +200,8 @@ def upgrade():
         sa.Column("updated_at", postgresql.TIMESTAMPTZ(), nullable=False, server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"]),
         sa.ForeignKeyConstraint(["connection_id"], ["connections.id"]),
+        sa.ForeignKeyConstraint(["recent_post_id"], ["posts.id"]),
+        sa.ForeignKeyConstraint(["recent_signal_id"], ["signals.id"]),
         sa.UniqueConstraint("workspace_id", "connection_id"),
     )
     op.create_index(
@@ -548,8 +550,8 @@ class PersonSignalSummary(Base):
     aggregate_score = Column(Float, nullable=False, default=0.0)
     trend_direction = Column(String, nullable=False, default="flat")
     last_signal_at = Column(TIMESTAMPTZ)
-    recent_post_id = Column(UUID(as_uuid=True))
-    recent_signal_id = Column(UUID(as_uuid=True))
+    recent_post_id = Column(UUID(as_uuid=True), ForeignKey("posts.id"))
+    recent_signal_id = Column(UUID(as_uuid=True), ForeignKey("signals.id"))
     updated_at = Column(TIMESTAMPTZ, nullable=False, server_default="now()")
 ```
 
