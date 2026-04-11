@@ -29,19 +29,31 @@ class ScoringResult:
 
 def compute_combined_score(
     relevance_score: float,
-    connection,  # Connection ORM object or SimpleNamespace with degree, relationship_score, has_interacted
+    connection,
     posted_at: datetime,
     weights: dict | None = None,
+    keyword_match_strength: float = 0.0,
 ) -> ScoringResult:
     """
     Compute 3-dimension combined score for a post+connection pair.
 
     Dimensions:
-      - relevance: semantic match quality (0-1), provided by caller
+      - relevance: semantic match quality (0-1), provided by caller.
+        When keyword_match_strength > 0, relevance is boosted by a fraction
+        of the keyword match strength to reflect the Ring 1 hit. Capped at 1.0.
       - relationship: warmth of connection (degree + interaction history)
       - timing: urgency decay (linear over 24 hours)
+
+    Args:
+      keyword_match_strength: 0.0 (no keyword match) to 1.0 (full match).
+        This replaces the old keyword_prefilter hard gate: instead of
+        dropping posts that fail the keyword filter, we score all posts
+        and let the keyword filter add a boost.
     """
     w = weights or DEFAULT_WEIGHTS
+
+    # Relevance boost from keyword match — up to +0.15
+    boosted_relevance = min(1.0, relevance_score + 0.15 * keyword_match_strength)
 
     # Relationship score
     if connection.relationship_score is not None:
@@ -61,13 +73,12 @@ def compute_combined_score(
 
     # Combined weighted score
     combined = (
-        relevance_score    * w["relevance"] +
-        relationship_score * w["relationship"] +
-        timing_score       * w["timing"]
+        boosted_relevance   * w["relevance"] +
+        relationship_score  * w["relationship"] +
+        timing_score        * w["timing"]
     )
     combined = min(1.0, max(0.0, combined))
 
-    # Priority bucketing
     if combined >= 0.80:
         priority = Priority.HIGH
     elif combined >= 0.55:
@@ -76,7 +87,7 @@ def compute_combined_score(
         priority = Priority.LOW
 
     return ScoringResult(
-        relevance_score=relevance_score,
+        relevance_score=boosted_relevance,
         relationship_score=relationship_score,
         timing_score=timing_score,
         combined_score=combined,
