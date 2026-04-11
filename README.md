@@ -3,7 +3,8 @@
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.12-blue.svg)
 ![Node](https://img.shields.io/badge/node-20+-green.svg)
-![Status](https://img.shields.io/badge/phase-1%20complete-brightgreen.svg)
+![Status](https://img.shields.io/badge/phase-2%20foundation%20shipped-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-54%2F54%20passing-brightgreen.svg)
 
 **Network-aware LinkedIn intent intelligence for B2B revenue teams.**
 
@@ -124,7 +125,7 @@ Thresholds auto-adjust based on your feedback: if fewer than 40% of recent alert
 | Public fallback | Apify LinkedIn post scraper |
 | Frontend | React 18, Vite, TypeScript |
 | Extension | Chrome MV3 |
-| Auth | JWT (python-jose, bcrypt) |
+| Auth | JWT (PyJWT 2.12+, bcrypt<4.1, passlib) |
 | ORM | SQLAlchemy 2.0 (async) |
 
 ---
@@ -279,7 +280,7 @@ sonar/
 │   │       ├── public_poller.py # Hourly Apify scraper fallback
 │   │       └── digest_sender.py # Hourly medium/low email digest
 │   ├── alembic/                 # Database migrations
-│   ├── tests/                   # 11 unit tests + 1 e2e test
+│   ├── tests/                   # 54 tests: models, services, routers, pipeline, e2e
 │   └── pyproject.toml
 ├── extension/                   # Chrome MV3 extension
 ├── frontend/                    # React 18 + Vite dashboard
@@ -311,9 +312,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 | Phase | Status | Description |
 |---|---|---|
 | Phase 1 | ✅ Complete | Core pipeline: extension → ingest → match → alert → deliver |
-| Phase 2 | Planned | Network map, trending topics, weekly intelligence brief |
-| Phase 3 | Planned | Full relationship memory, CRM sync, account-level scoring |
-| Phase 4 | Planned | White-label API, enterprise, predictive conversion scoring |
+| Phase 2 — Foundation | ✅ Shipped | Data model, Ring 1/2 matchers, pipeline refactor, scorer keyword bonus, one-shot backfill script |
+| Phase 2 — Wizard | ⬜ Planned | Signal Configuration Wizard (backend API + frontend UI) |
+| Phase 2 — Dashboard | ⬜ Planned | Network Intelligence Dashboard + incremental aggregation |
+| Phase 2 — Backfill | ⬜ Planned | Day-One Backfill (Chrome extension + Apify integration) |
+| Phase 2 — Discovery | ⬜ Planned | Ring 3 nightly HDBSCAN clustering + Weekly Digest Email |
+| Phase 3 | TBD | Real-time alerts, CRM integrations, team features (no design yet) |
+
+See [TODO.md](TODO.md) for prioritized next steps and [`docs/phase-2/`](docs/phase-2/) for design specs and implementation plans.
 
 ---
 
