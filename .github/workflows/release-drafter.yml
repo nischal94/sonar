@@ -12,7 +12,13 @@ on:
   push:
     branches:
       - main
-  pull_request_target:
+  # `pull_request` (not `pull_request_target`) — the autolabeler only reads the
+  # PR title, it never checks out PR code, and using the safer trigger avoids
+  # the well-known fork-PR injection vector `pull_request_target` opens up.
+  # Forked-PR labeling is lost; we accept that since this is a solo-maintained
+  # public repo and release-drafter on `push: main` still categorizes correctly
+  # from whatever label the human applies on merge.
+  pull_request:
     types:
       - opened
       - reopened
