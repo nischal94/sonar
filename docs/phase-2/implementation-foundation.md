@@ -64,7 +64,7 @@ Each file has one clear responsibility. Matchers are isolated, services are pure
 ## Test Strategy Note for Implementers
 
 - Backend tests use `pytest` + `pytest-asyncio`. Existing conftest at `backend/tests/conftest.py` provides `db_session` and `test_engine` fixtures that spin up the full schema against a test database. **You do not need to mock the database** — use real postgres with pgvector.
-- Tests run with `cd backend && uv run pytest`. A single test is `uv run pytest tests/test_ring1_matcher.py::test_should_match_exact_phrase -v`.
+- Tests run with `docker compose exec -T api pytest`. A single test is `docker compose exec -T api pytest tests/test_ring1_matcher.py::test_should_match_exact_phrase -v`. All commands execute inside the `api` container which already has `uv`, Python, and every dep installed. Do NOT install anything on the host.
 - The test database is `sonar_test` (see `conftest.py:17`). You need postgres running — `docker compose up -d db` from the repo root.
 - Follow `test_*` function-style naming consistent with existing tests (see `backend/tests/test_matcher.py` for the reference pattern).
 - When a test requires a fresh schema, the `test_engine` fixture calls `Base.metadata.create_all`, which only reflects ORM-declared columns. Phase 1 added two `vector(1536)` columns via raw `op.execute` without declaring them in the ORM, so `create_all` was silently building a test DB that was missing those columns. Task 1 fixes this by installing `pgvector` and declaring `embedding` on the Post and CapabilityProfileVersion models. After Task 1, `create_all` builds the real full schema — including every embedding column — and Phase 2 pipeline tests work against it.
@@ -82,23 +82,30 @@ Each file has one clear responsibility. Matchers are isolated, services are pure
 
 **Why the model updates are in Task 1:** Phase 1 added `posts.embedding` and `capability_profile_versions.embedding` via raw `op.execute("ALTER TABLE ... vector(1536)")` in migration 001. The ORM models never declared those columns, so `Base.metadata.create_all` (used by `backend/tests/conftest.py:21` to build the test DB) creates those tables *without* the embedding columns. Phase 1 tests got away with this because none of them ran the full pipeline through post embeddings. Phase 2 tests do — so the test DB must have those columns. The fix is to use `pgvector.sqlalchemy.Vector` in the ORM so `create_all` builds the column. Migration 001 does not need to change.
 
-- [ ] **Step 1.0: Add pgvector Python package and update existing ORM models**
+- [ ] **Step 1.0: Verify pgvector is already a dependency and update existing ORM models**
 
-Add pgvector to backend dependencies. In `backend/pyproject.toml`, find the `dependencies = [ ... ]` list and add `"pgvector>=0.4.0",` alongside the existing entries (e.g., next to `"numpy>=1.26.0"`).
-
-Then:
+Phase 1 already has `pgvector>=0.3.0` in `backend/pyproject.toml`. Verify it's there:
 
 ```bash
-cd backend && uv sync
+grep '"pgvector' backend/pyproject.toml
 ```
 
-Expected: `pgvector` appears in the resolved dependency tree. No errors.
+Expected: `    "pgvector>=0.3.0",` (or a later version). If it's missing, add `"pgvector>=0.4.0",` alongside the other entries.
 
-Update `backend/app/models/post.py` — add the pgvector import and an `embedding` column. This is in addition to the Phase 2 additions that Task 6 will add. Show the final model so Task 6 only needs to layer on top of this:
+If you added or changed a dep, sync inside the api container:
+
+```bash
+docker compose exec -T api uv sync --all-extras
+```
+
+Expected: no errors. If pgvector was already present at the right version, this step is a no-op.
+
+Update `backend/app/models/post.py` — add the pgvector import and an `embedding` column. Task 6 will layer the JSONB columns on top of this, so the post-Step-1.0 file looks like:
 
 ```python
 from sqlalchemy import Column, String, Float, Boolean, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID, TIMESTAMPTZ
+from sqlalchemy.dialects.postgresql import UUID
+from app.models._types import TIMESTAMPTZ
 from pgvector.sqlalchemy import Vector
 import uuid
 from app.database import Base
@@ -127,7 +134,9 @@ class Post(Base):
     embedding = Column(Vector(1536))
 ```
 
-Update `backend/app/models/workspace.py` — add the pgvector import and an `embedding` column on `CapabilityProfileVersion`. Append this column after `performance_score`:
+Note: `TIMESTAMPTZ` is imported from `app.models._types` — a local shim created during Phase 1 dev env fixes because `sqlalchemy.dialects.postgresql` does not export a `TIMESTAMPTZ` name in SQLAlchemy 2.x. Do NOT try to import `TIMESTAMPTZ` from `sqlalchemy.dialects.postgresql` — it does not exist and will fail.
+
+Update `backend/app/models/workspace.py` — add the pgvector import and an `embedding` column on `CapabilityProfileVersion`. The imports are already correct for `TIMESTAMPTZ` (from `app.models._types`). Add the pgvector import and the embedding column:
 
 ```python
 # At the top of the file, next to the existing SQLAlchemy imports:
@@ -136,8 +145,6 @@ from pgvector.sqlalchemy import Vector
 # In the CapabilityProfileVersion class, add after performance_score:
     embedding = Column(Vector(1536))
 ```
-
-Remove the now-outdated comment `# embedding stored via pgvector — added in migration using Vector type` if it's still present — the column is now declared in the ORM.
 
 Do not commit yet — steps 1.1-1.3 will add the migration and verify the full picture, then step 1.4 commits everything together.
 
@@ -302,7 +309,7 @@ def downgrade():
 - [ ] **Step 1.2: Run the migration**
 
 ```bash
-cd backend && uv run alembic upgrade head
+docker compose exec -T api alembic upgrade head
 ```
 
 Expected output: `Running upgrade 001 -> 002, Phase 2 foundation: signals, aggregation tables, post columns`
@@ -310,7 +317,7 @@ Expected output: `Running upgrade 001 -> 002, Phase 2 foundation: signals, aggre
 - [ ] **Step 1.3: Verify the schema**
 
 ```bash
-cd backend && uv run python -c "
+docker compose exec -T api python -c "
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
@@ -400,7 +407,7 @@ async def test_should_persist_signal_row(db_session):
 - [ ] **Step 2.2: Run test to verify it fails**
 
 ```bash
-cd backend && uv run pytest tests/test_signal_model.py -v
+docker compose exec -T api pytest tests/test_signal_model.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'app.models.signal'`
@@ -442,7 +449,7 @@ from app.models.signal import Signal  # noqa: F401
 - [ ] **Step 2.4: Run test to verify it passes**
 
 ```bash
-cd backend && uv run pytest tests/test_signal_model.py -v
+docker compose exec -T api pytest tests/test_signal_model.py -v
 ```
 
 Expected: PASS.
@@ -524,7 +531,7 @@ async def test_should_persist_person_signal_summary(db_session):
 - [ ] **Step 3.2: Run test to verify it fails**
 
 ```bash
-cd backend && uv run pytest tests/test_person_signal_summary_model.py -v
+docker compose exec -T api pytest tests/test_person_signal_summary_model.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError`.
@@ -565,7 +572,7 @@ from app.models.person_signal_summary import PersonSignalSummary  # noqa: F401
 - [ ] **Step 3.4: Run test to verify it passes**
 
 ```bash
-cd backend && uv run pytest tests/test_person_signal_summary_model.py -v
+docker compose exec -T api pytest tests/test_person_signal_summary_model.py -v
 ```
 
 Expected: PASS.
@@ -626,7 +633,7 @@ async def test_should_persist_company_signal_summary(db_session):
 - [ ] **Step 4.2: Run test to verify it fails**
 
 ```bash
-cd backend && uv run pytest tests/test_company_signal_summary_model.py -v
+docker compose exec -T api pytest tests/test_company_signal_summary_model.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError`.
@@ -664,7 +671,7 @@ from app.models.company_signal_summary import CompanySignalSummary  # noqa: F401
 - [ ] **Step 4.4: Run test to verify it passes**
 
 ```bash
-cd backend && uv run pytest tests/test_company_signal_summary_model.py -v
+docker compose exec -T api pytest tests/test_company_signal_summary_model.py -v
 ```
 
 Expected: PASS.
@@ -756,7 +763,7 @@ async def test_should_persist_ring3_trend_with_cluster_label(db_session):
 - [ ] **Step 5.2: Run test to verify it fails**
 
 ```bash
-cd backend && uv run pytest tests/test_trend_model.py -v
+docker compose exec -T api pytest tests/test_trend_model.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError`.
@@ -798,7 +805,7 @@ from app.models.trend import Trend  # noqa: F401
 - [ ] **Step 5.4: Run tests to verify they pass**
 
 ```bash
-cd backend && uv run pytest tests/test_trend_model.py -v
+docker compose exec -T api pytest tests/test_trend_model.py -v
 ```
 
 Expected: Both tests PASS.
@@ -862,7 +869,7 @@ async def test_post_should_store_ring1_and_ring2_matches(db_session):
 - [ ] **Step 6.2: Run test to verify it fails**
 
 ```bash
-cd backend && uv run pytest tests/test_post_model_phase2.py -v
+docker compose exec -T api pytest tests/test_post_model_phase2.py -v
 ```
 
 Expected: FAIL with `TypeError` about unexpected keyword argument `ring1_matches`.
@@ -873,7 +880,8 @@ Modify `backend/app/models/post.py` to add the new Phase 2 columns. Task 1 alrea
 
 ```python
 from sqlalchemy import Column, String, Float, Boolean, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID, TIMESTAMPTZ, JSONB
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from app.models._types import TIMESTAMPTZ
 from pgvector.sqlalchemy import Vector
 import uuid
 from app.database import Base
@@ -910,7 +918,7 @@ class Post(Base):
 - [ ] **Step 6.4: Run test to verify it passes**
 
 ```bash
-cd backend && uv run pytest tests/test_post_model_phase2.py -v
+docker compose exec -T api pytest tests/test_post_model_phase2.py -v
 ```
 
 Expected: PASS.
@@ -967,7 +975,7 @@ async def test_workspace_can_set_backfill_used_true(db_session):
 - [ ] **Step 7.2: Run test to verify it fails**
 
 ```bash
-cd backend && uv run pytest tests/test_workspace_phase2_columns.py -v
+docker compose exec -T api pytest tests/test_workspace_phase2_columns.py -v
 ```
 
 Expected: FAIL with `AttributeError` about `backfill_used`.
@@ -985,7 +993,7 @@ The final file has `backfill_used` as the last column before `users = relationsh
 - [ ] **Step 7.4: Run test to verify it passes**
 
 ```bash
-cd backend && uv run pytest tests/test_workspace_phase2_columns.py -v
+docker compose exec -T api pytest tests/test_workspace_phase2_columns.py -v
 ```
 
 Expected: Both tests PASS.
@@ -1069,7 +1077,7 @@ def test_should_handle_empty_signal_list():
 - [ ] **Step 8.2: Run tests to verify they fail**
 
 ```bash
-cd backend && uv run pytest tests/test_ring1_matcher.py -v
+docker compose exec -T api pytest tests/test_ring1_matcher.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'app.services.ring1_matcher'`.
@@ -1125,7 +1133,7 @@ def match_post_to_ring1_signals(
 - [ ] **Step 8.4: Run tests to verify they pass**
 
 ```bash
-cd backend && uv run pytest tests/test_ring1_matcher.py -v
+docker compose exec -T api pytest tests/test_ring1_matcher.py -v
 ```
 
 Expected: All 6 tests PASS.
@@ -1245,7 +1253,7 @@ async def test_should_skip_disabled_signals(db_session):
 - [ ] **Step 9.2: Run tests to verify they fail**
 
 ```bash
-cd backend && uv run pytest tests/test_ring2_matcher.py -v
+docker compose exec -T api pytest tests/test_ring2_matcher.py -v
 ```
 
 Expected: FAIL with `ModuleNotFoundError: No module named 'app.services.ring2_matcher'`.
@@ -1317,7 +1325,7 @@ async def match_post_embedding_to_ring2_signals(
 - [ ] **Step 9.4: Run tests to verify they pass**
 
 ```bash
-cd backend && uv run pytest tests/test_ring2_matcher.py -v
+docker compose exec -T api pytest tests/test_ring2_matcher.py -v
 ```
 
 Expected: All 3 tests PASS.
@@ -1404,7 +1412,7 @@ async def test_alert_context_defaults_themes_to_empty_list_when_missing():
 - [ ] **Step 10.2: Run test to verify it fails**
 
 ```bash
-cd backend && uv run pytest tests/test_context_generator_themes.py -v
+docker compose exec -T api pytest tests/test_context_generator_themes.py -v
 ```
 
 Expected: FAIL — `AlertContext` has no `themes` field.
@@ -1511,7 +1519,7 @@ async def generate_alert_context(
 - [ ] **Step 10.4: Run tests to verify they pass**
 
 ```bash
-cd backend && uv run pytest tests/test_context_generator_themes.py -v
+docker compose exec -T api pytest tests/test_context_generator_themes.py -v
 ```
 
 Expected: Both tests PASS.
@@ -1592,7 +1600,7 @@ def test_scorer_keyword_strength_defaults_to_zero_when_not_provided():
 - [ ] **Step 11.2: Run tests to verify they fail**
 
 ```bash
-cd backend && uv run pytest tests/test_scorer_phase2.py -v
+docker compose exec -T api pytest tests/test_scorer_phase2.py -v
 ```
 
 Expected: FAIL — `keyword_match_strength` is not a parameter of `compute_combined_score`.
@@ -1673,7 +1681,7 @@ def compute_combined_score(
 - [ ] **Step 11.4: Run tests to verify they pass**
 
 ```bash
-cd backend && uv run pytest tests/test_scorer_phase2.py -v
+docker compose exec -T api pytest tests/test_scorer_phase2.py -v
 ```
 
 Expected: All 3 tests PASS.
@@ -1681,7 +1689,7 @@ Expected: All 3 tests PASS.
 - [ ] **Step 11.5: Re-run the existing scorer tests to ensure no regressions**
 
 ```bash
-cd backend && uv run pytest tests/ -v -k scorer
+docker compose exec -T api pytest tests/ -v -k scorer
 ```
 
 Expected: All scorer tests (old and new) pass.
@@ -1841,7 +1849,7 @@ async def test_pipeline_persists_embedding_and_ring_matches(db_session, monkeypa
 - [ ] **Step 12.2: Run test to verify it fails**
 
 ```bash
-cd backend && uv run pytest tests/test_pipeline_phase2.py -v
+docker compose exec -T api pytest tests/test_pipeline_phase2.py -v
 ```
 
 Expected: FAIL — the current pipeline does not persist `ring1_matches`, `ring2_matches`, or `themes`.
@@ -2075,7 +2083,7 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
 - [ ] **Step 12.4: Run the pipeline test to verify it passes**
 
 ```bash
-cd backend && uv run pytest tests/test_pipeline_phase2.py -v
+docker compose exec -T api pytest tests/test_pipeline_phase2.py -v
 ```
 
 Expected: PASS.
@@ -2083,7 +2091,7 @@ Expected: PASS.
 - [ ] **Step 12.5: Run the full test suite to ensure no regressions**
 
 ```bash
-cd backend && uv run pytest -v
+docker compose exec -T api pytest -v
 ```
 
 Expected: all tests pass. If prior pipeline tests fail because they were asserting the keyword-filter gate behavior, update them to reflect the new "no-gate" behavior (pass-through with lower scores) and commit that fix as part of this task.
@@ -2121,7 +2129,7 @@ into rows in the new signals table.
 Run once after migration 002 is applied, before any real Phase 2 traffic.
 
 Usage:
-    cd backend && uv run python scripts/backfill_signals_from_keywords.py
+    docker compose exec -T api python scripts/backfill_signals_from_keywords.py
 """
 import asyncio
 import uuid
@@ -2217,7 +2225,7 @@ if __name__ == "__main__":
 - [ ] **Step 13.2: Sanity-check the script syntax**
 
 ```bash
-cd backend && uv run python -c "import ast; ast.parse(open('scripts/backfill_signals_from_keywords.py').read())"
+docker compose exec -T api python -c "import ast; ast.parse(open('scripts/backfill_signals_from_keywords.py').read())"
 ```
 
 Expected: no output (parse succeeds).
@@ -2295,7 +2303,7 @@ async def test_backfill_creates_signals_from_capability_profile_keywords(
 Run:
 
 ```bash
-cd backend && uv run pytest tests/test_backfill_signals_script.py -v
+docker compose exec -T api pytest tests/test_backfill_signals_script.py -v
 ```
 
 Expected: PASS. If the patching is tricky (the script owns its own session), it is acceptable to instead refactor `backfill_signals_from_keywords.py` to expose a `async def run(db)` helper that the `main()` wrapper calls with a real session, and test `run(db)` directly. Either approach is fine — the goal is a test that provably exercises the INSERT logic with a mocked embedding provider.
@@ -2303,7 +2311,7 @@ Expected: PASS. If the patching is tricky (the script owns its own session), it 
 - [ ] **Step 13.4: Run the script against the dev database**
 
 ```bash
-cd backend && uv run python scripts/backfill_signals_from_keywords.py
+docker compose exec -T api python scripts/backfill_signals_from_keywords.py
 ```
 
 Expected output: `[backfill] done. created=N skipped_profiles=M` where N and M depend on existing seeded data.
@@ -2311,7 +2319,7 @@ Expected output: `[backfill] done. created=N skipped_profiles=M` where N and M d
 - [ ] **Step 13.5: Verify signals were created**
 
 ```bash
-cd backend && uv run python -c "
+docker compose exec -T api python -c "
 import asyncio
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy import text
@@ -2511,7 +2519,7 @@ async def test_pipeline_respects_workspace_anti_keywords(db_session, monkeypatch
 - [ ] **Step 14.3: Run the full phase 2 pipeline tests**
 
 ```bash
-cd backend && uv run pytest tests/test_pipeline_phase2.py -v
+docker compose exec -T api pytest tests/test_pipeline_phase2.py -v
 ```
 
 Expected: All tests PASS, including the regression tests from 14.1 and 14.2.
@@ -2519,7 +2527,7 @@ Expected: All tests PASS, including the regression tests from 14.1 and 14.2.
 - [ ] **Step 14.4: Run the full backend test suite one last time**
 
 ```bash
-cd backend && uv run pytest -v
+docker compose exec -T api pytest -v
 ```
 
 Expected: every test passes. No Phase 1 regressions, all new Phase 2 foundation tests green.
@@ -2537,10 +2545,10 @@ git commit -m "test(pipeline): regression tests for non-keyword-match and anti_k
 
 Before opening the PR against main, manually verify:
 
-- [ ] `alembic upgrade head` runs cleanly on a fresh database.
-- [ ] `alembic downgrade -1` cleanly rolls back migration 002 (schema reverts without errors).
-- [ ] `backfill_signals_from_keywords.py` runs without exceptions against the dev database.
-- [ ] `uv run pytest` passes with every test green.
+- [ ] `docker compose exec -T api alembic upgrade head` runs cleanly on a fresh database.
+- [ ] `docker compose exec -T api alembic downgrade -1` cleanly rolls back migration 002 (schema reverts without errors).
+- [ ] `docker compose exec -T api python scripts/backfill_signals_from_keywords.py` runs without exceptions against the dev database.
+- [ ] `docker compose exec -T api pytest` passes every NEW test and does not regress the Phase 1 baseline. (Phase 1 baseline before Foundation: 21 pass / 1 fail / 4 error — the failure and errors are pre-existing Phase 1 test bugs unrelated to Foundation. Foundation adds new tests that must all pass; the pre-existing Phase 1 failures are acceptable as long as they don't change.)
 - [ ] No new files outside the scope listed in "File Structure" above.
 - [ ] Commit messages follow Conventional Commits.
 - [ ] No `git rm` or destructive commands were run during this plan.
