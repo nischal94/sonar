@@ -1,5 +1,6 @@
 from sqlalchemy import Column, String, Float, Boolean, Numeric
-from sqlalchemy.dialects.postgresql import UUID, TIMESTAMPTZ
+from sqlalchemy.dialects.postgresql import UUID
+from app.models._types import TIMESTAMPTZ
 import uuid
 from app.database import Base
 
