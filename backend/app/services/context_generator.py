@@ -64,10 +64,17 @@ async def generate_alert_context(
     else:
         raw = await groq_provider.complete(prompt=prompt, model="llama-3.3-70b-versatile")
 
-    # Strip markdown fences if present
+    # Strip markdown fences if present (handles ``` and ```json)
     raw = raw.strip()
     if raw.startswith("```"):
-        raw = raw.split("\n", 1)[1].rsplit("```", 1)[0]
+        lines = raw.split("\n")
+        raw = "\n".join(lines[1:]).rsplit("```", 1)[0].strip()
 
-    data = json.loads(raw)
-    return AlertContext(**data)
+    try:
+        data = json.loads(raw)
+        return AlertContext(**data)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise ValueError(
+            f"[ContextGenerator] LLM returned unparseable JSON: {exc}. "
+            f"Raw (first 200 chars): {raw[:200]}"
+        ) from exc

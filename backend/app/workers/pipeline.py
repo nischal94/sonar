@@ -94,6 +94,9 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
             return
 
         connection = await db.get(Connection, post.connection_id)
+        if connection is None:
+            await engine.dispose()
+            return
 
         # Stage 5: 3-dimension scoring
         scoring = compute_combined_score(

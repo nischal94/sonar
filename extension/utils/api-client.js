@@ -1,5 +1,13 @@
 // extension/utils/api-client.js
-const SONAR_API_BASE = 'https://api.yoursonar.com'; // Change to http://localhost:8000 for dev
+// API base is read from storage (set via popup settings). Defaults to localhost for dev.
+let _cachedApiBase = null;
+
+async function _getApiBase() {
+  if (_cachedApiBase) return _cachedApiBase;
+  const data = await chrome.storage.local.get('api_base');
+  _cachedApiBase = data.api_base || 'http://localhost:8000';
+  return _cachedApiBase;
+}
 
 const SonarAPI = {
   async ingestPosts(posts) {
@@ -9,7 +17,8 @@ const SonarAPI = {
       return null;
     }
 
-    const response = await fetch(`${SONAR_API_BASE}/ingest`, {
+    const apiBase = await _getApiBase();
+    const response = await fetch(`${apiBase}/ingest`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

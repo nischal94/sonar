@@ -1,3 +1,4 @@
+import asyncio
 from twilio.rest import Client
 from app.config import get_settings
 
@@ -22,7 +23,8 @@ class WhatsAppSender:
             f"Ref: {short_id}"
         )
 
-        self._client.messages.create(
+        await asyncio.to_thread(
+            self._client.messages.create,
             from_=get_settings().twilio_whatsapp_from,
             to=f"whatsapp:{to_phone}",
             body=body,
