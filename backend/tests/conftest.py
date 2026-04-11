@@ -1,9 +1,23 @@
+import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from app.main import app
 from app.database import Base, get_db
 from app.config import get_settings
+
+
+@pytest.fixture(autouse=True)
+def _reset_provider_singletons():
+    """Clear lazy provider caches after each test so a real client populated
+    by one test cannot leak into another (would cause spooky action at a
+    distance — e.g. a test that forgets to mock silently benefits from a
+    prior test's real client). Closes issue #22."""
+    yield
+    from app.services import embedding, llm
+    embedding._provider = None
+    llm._openai = None
+    llm._groq = None
 
 # Note: no user-defined `event_loop` fixture.
 # pytest-asyncio 1.x supplies a function-scoped event loop by default,

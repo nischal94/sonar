@@ -62,3 +62,8 @@ groq_provider: LLMProvider = _LazyGroq()
 
 # Alias used in profile_extractor (always uses GPT-4o for quality)
 llm_client = openai_provider
+
+
+def get_llm_client() -> LLMProvider:
+    """FastAPI Depends() factory for the default LLM client. See #21."""
+    return llm_client

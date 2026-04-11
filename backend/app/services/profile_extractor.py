@@ -1,7 +1,7 @@
 import json
 import httpx
 from dataclasses import dataclass
-from app.services.llm import llm_client
+from app.services.llm import llm_client, LLMProvider
 
 PROFILE_EXTRACTION_PROMPT = """
 Analyze this company's website/document to build a sales intelligence capability profile.
@@ -52,10 +52,17 @@ async def fetch_url_content(url: str) -> str:
 async def extract_capability_profile(
     text: str | None = None,
     url: str | None = None,
+    llm_override: LLMProvider | None = None,
 ) -> CapabilityProfile:
     """
     Extract capability profile from either raw text or a URL.
     Uses GPT-4o for highest quality — this runs once at onboarding.
+
+    `llm_override` is optional so existing callers keep working; when omitted,
+    the module-level `llm_client` is used. Routers that want to inject a test
+    double via FastAPI Depends should pass it explicitly. Parameter is named
+    `llm_override` (not `llm_client`) so it doesn't shadow the module-level
+    name that existing tests patch.
     """
     if not text and not url:
         raise ValueError("Either text or url must be provided")
@@ -63,7 +70,8 @@ async def extract_capability_profile(
     content = text or await fetch_url_content(url)
     prompt = PROFILE_EXTRACTION_PROMPT.format(content=content)
 
-    raw = await llm_client.complete(prompt=prompt, model="gpt-4o")
+    client = llm_override if llm_override is not None else llm_client
+    raw = await client.complete(prompt=prompt, model="gpt-4o")
 
     # Strip markdown fences if model adds them despite instruction
     raw = raw.strip()

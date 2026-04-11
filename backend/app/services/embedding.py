@@ -35,3 +35,11 @@ class _LazyEmbeddingProvider:
 
 
 embedding_provider: EmbeddingProvider = _LazyEmbeddingProvider()
+
+
+def get_embedding_provider() -> EmbeddingProvider:
+    """FastAPI Depends() factory. Tests use
+    `app.dependency_overrides[get_embedding_provider] = lambda: fake` instead
+    of patching module globals — impossible to defeat with `from ... import ...`
+    because the override layer sits above Python's import binding. See #21."""
+    return embedding_provider
