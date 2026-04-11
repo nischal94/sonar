@@ -2551,7 +2551,7 @@ Before opening the PR against main, manually verify:
 git push -u origin feat/phase-2-foundation
 gh pr create --base main --head feat/phase-2-foundation \
   --title "feat: Phase 2 Foundation — data model, Ring 1/2 matching, pipeline refactor" \
-  --body "See docs/phase-2/design.md for design. Implements the Foundation plan at docs/phase-2/foundation.md."
+  --body "See docs/phase-2/design.md for design. Implements the Foundation plan at docs/phase-2/implementation-foundation.md."
 ```
 
 Do not merge without user review.

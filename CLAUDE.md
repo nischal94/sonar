@@ -53,29 +53,32 @@ Branch naming: `feat/<scope>-<short-description>`, `fix/<bug>`, `chore/<topic>`,
 
 ```
 sonar/
-├── CLAUDE.md                    # This file
-├── README.md                    # Product overview
-├── TODO.md                      # Setup checklist
+├── CLAUDE.md                              # This file
+├── README.md                              # Product overview
+├── TODO.md                                # Setup checklist
 ├── docs/
 │   ├── phase-1/
-│   │   ├── design.md            # Original Phase 1 product design (historical)
-│   │   └── implementation.md    # Completed Phase 1 implementation plan (historical)
+│   │   ├── design.md                      # Original Phase 1 product design (historical)
+│   │   └── implementation.md              # Completed Phase 1 implementation plan (historical)
 │   ├── phase-2/
-│   │   ├── design.md            # Phase 2 design spec
-│   │   ├── foundation.md        # Phase 2 Foundation plan
-│   │   ├── wizard.md            # Phase 2 Wizard plan (future)
-│   │   ├── dashboard.md         # Phase 2 Dashboard plan (future)
-│   │   ├── backfill.md          # Phase 2 Backfill plan (future)
-│   │   └── discovery.md         # Phase 2 Discovery + Digest plan (future)
-│   └── phase-3/                 # (does not exist yet)
+│   │   ├── design.md                      # Phase 2 design spec
+│   │   ├── implementation-foundation.md   # Phase 2 Foundation plan
+│   │   ├── implementation-wizard.md       # Phase 2 Wizard plan (future)
+│   │   ├── implementation-dashboard.md    # Phase 2 Dashboard plan (future)
+│   │   ├── implementation-backfill.md     # Phase 2 Backfill plan (future)
+│   │   └── implementation-discovery.md    # Phase 2 Discovery + Digest plan (future)
+│   └── phase-3/                           # (does not exist yet)
 └── ...
 ```
 
 **Rules:**
 - Group docs by phase as directories: `docs/phase-N/`.
-- Inside each phase directory: `design.md` is the spec ("what and why"), all other files are implementation plans for features in that phase ("how").
+- Inside each phase directory:
+  - `design.md` — the spec ("what and why"). Always this name.
+  - `implementation.md` — the implementation plan, when a phase has **one** plan (like Phase 1).
+  - `implementation-<feature>.md` — the implementation plan for each shippable slice, when a phase has **multiple** plans (like Phase 2). The `implementation-` prefix keeps the naming consistent with single-plan phases; the `<feature>` suffix distinguishes the slice.
 - No date prefixes in filenames — git history has dates, filenames are for humans.
-- No `specs/` vs `plans/` subdirectories — the filename (`design.md` vs everything else) carries the distinction.
+- No `specs/` vs `plans/` subdirectories — the filename carries the distinction.
 - No `archive/` directory — old phases are just `phase-N/`, not "archived." They stay tracked and readable.
 - No `sonar-` prefix in filenames — we're already in the Sonar repo.
 - No `docs/superpowers/` subdirectory — that was internal tooling naming, removed.
@@ -141,6 +144,6 @@ Extension: Chrome Manifest V3, plain JS (no bundler).
 
 Sonar is being built in phases. As of 2026-04-11:
 - **Phase 1** — ingest pipeline, capability profile, signal matching, alerts, delivery channels. Shipped. Historical docs in `docs/phase-1/`.
-- **Phase 2** — Signal Configuration Wizard, Day-One Backfill, Network Intelligence Dashboard, Three-Ring Trending Topics, Weekly Digest Email. Design spec at `docs/phase-2/design.md`. Implementation plans in `docs/phase-2/<feature>.md`.
+- **Phase 2** — Signal Configuration Wizard, Day-One Backfill, Network Intelligence Dashboard, Three-Ring Trending Topics, Weekly Digest Email. Design spec at `docs/phase-2/design.md`. Implementation plans at `docs/phase-2/implementation-<feature>.md` (Foundation, Wizard, Dashboard, Backfill, Discovery — sequential).
 
 Read the current phase's `design.md` before starting any work so you understand the in-progress direction.
