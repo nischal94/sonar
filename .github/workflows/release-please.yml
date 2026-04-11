@@ -1,0 +1,36 @@
+name: release-please
+
+# Replaces release-drafter. release-please does what release-drafter doesn't:
+# it watches merged Conventional Commits PRs and maintains a "Release PR"
+# that auto-updates CHANGELOG.md in the repo with grouped entries. When you
+# merge the Release PR, release-please tags a version and creates a GitHub
+# Release simultaneously.
+#
+# How it works on every push to main:
+# 1. release-please scans commits since the last release for Conventional
+#    Commits prefixes (feat:, fix:, docs:, chore:, etc.)
+# 2. It opens (or updates) a single "chore(main): release X.Y.Z" PR
+#    containing the proposed CHANGELOG.md diff and version bump
+# 3. When you merge that Release PR, release-please tags v X.Y.Z and
+#    publishes a GitHub Release with the same content
+#
+# No manual CHANGELOG.md edits required going forward — every PR with a
+# Conventional Commits title automatically becomes an entry.
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          config-file: .github/release-please-config.json
+          manifest-file: .github/.release-please-manifest.json
