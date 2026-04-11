@@ -1,3 +1,4 @@
+import logging
 import pytest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -72,3 +73,43 @@ async def test_router_skips_channel_below_min_priority():
     await router.deliver(alert=alert, workspace=workspace)
 
     mock_instance.send.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_router_logs_channel_failure_and_continues_siblings(caplog):
+    """A failing sender must not cancel sibling channels, and its exception
+    must be logged with channel + alert_id + workspace_id context instead of
+    being silently swallowed by asyncio.gather(return_exceptions=True)."""
+    alert = make_alert(priority="high")
+    workspace = SimpleNamespace(
+        id=uuid4(),
+        delivery_channels={
+            "slack": {"webhook_url": "https://hooks.slack.com/test", "min_priority": "low"},
+            "email": {"to": "ops@example.com", "min_priority": "low"},
+        },
+    )
+
+    # Slack raises; email succeeds. Both must be invoked (siblings preserved).
+    slack_class, slack_instance = _mock_sender_class()
+    slack_instance.send = AsyncMock(side_effect=RuntimeError("slack webhook 500"))
+    email_class, email_instance = _mock_sender_class()
+
+    router = DeliveryRouter(senders={"slack": slack_class, "email": email_class})
+
+    with caplog.at_level(logging.ERROR, logger="app.delivery.router"):
+        await router.deliver(alert=alert, workspace=workspace)
+
+    slack_instance.send.assert_called_once()
+    email_instance.send.assert_called_once()
+
+    failure_records = [r for r in caplog.records if r.name == "app.delivery.router"]
+    assert len(failure_records) == 1, "expected exactly one error log for the failing channel"
+    msg = failure_records[0].getMessage()
+    assert "slack" in msg
+    assert "slack webhook 500" in msg
+    assert str(alert.id) in msg
+    assert str(workspace.id) in msg
+    # Pin the `exc_info=result` kwarg so a regression that drops it (silently
+    # losing the stack trace in logs) fails loudly instead of sneaking through.
+    assert failure_records[0].exc_info is not None
+    assert failure_records[0].exc_info[1] is slack_instance.send.side_effect
