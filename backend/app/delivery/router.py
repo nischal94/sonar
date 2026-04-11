@@ -15,6 +15,12 @@ CHANNEL_SENDERS = {
 
 
 class DeliveryRouter:
+    def __init__(self, senders: dict[str, type] | None = None):
+        # Constructor-injected sender registry. Defaults to the module-level
+        # CHANNEL_SENDERS so production call sites stay unchanged. Tests pass
+        # a fake registry directly instead of monkey-patching globals.
+        self._senders = senders if senders is not None else CHANNEL_SENDERS
+
     async def deliver(self, alert, workspace=None, db=None) -> None:
         """
         Fan-out alert to all configured channels that meet the priority threshold.
@@ -36,7 +42,7 @@ class DeliveryRouter:
             min_value = PRIORITY_ORDER.get(min_priority, 1)
 
             if alert_priority_value >= min_value:
-                sender_class = CHANNEL_SENDERS.get(channel_name)
+                sender_class = self._senders.get(channel_name)
                 if sender_class:
                     sender = sender_class()
                     tasks.append(sender.send(alert=alert, workspace=workspace))
