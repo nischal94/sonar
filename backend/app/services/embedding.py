@@ -1,6 +1,5 @@
 from typing import Protocol
 from openai import AsyncOpenAI
-from app.config import get_settings
 
 class EmbeddingProvider(Protocol):
     async def embed(self, text: str) -> list[float]: ...
@@ -8,6 +7,7 @@ class EmbeddingProvider(Protocol):
 
 class OpenAIEmbeddingProvider:
     def __init__(self):
+        from app.config import get_settings
         self._client = AsyncOpenAI(api_key=get_settings().openai_api_key)
         self.model = "text-embedding-3-small"
         self.dimensions = 1536
@@ -22,4 +22,16 @@ class OpenAIEmbeddingProvider:
         return response.data[0].embedding
 
 
-embedding_provider = OpenAIEmbeddingProvider()
+_provider: OpenAIEmbeddingProvider | None = None
+
+
+class _LazyEmbeddingProvider:
+    """Defers OpenAI client instantiation until first use."""
+    async def embed(self, text: str) -> list[float]:
+        global _provider
+        if _provider is None:
+            _provider = OpenAIEmbeddingProvider()
+        return await _provider.embed(text)
+
+
+embedding_provider: EmbeddingProvider = _LazyEmbeddingProvider()

@@ -23,6 +23,7 @@ def upgrade():
         sa.Column("capability_profile", sa.Text()),
         sa.Column("matching_threshold", sa.Float(), nullable=False, server_default="0.72"),
         sa.Column("scoring_weights", postgresql.JSONB(), server_default='{"relevance":0.50,"relationship":0.30,"timing":0.20}'),
+        sa.Column("delivery_channels", postgresql.JSONB(), server_default="{}"),
         sa.Column("onboarding_url", sa.String()),
         sa.Column("onboarding_doc_path", sa.String()),
         sa.Column("created_at", postgresql.TIMESTAMPTZ(), nullable=False, server_default=sa.text("now()")),
@@ -103,7 +104,7 @@ def upgrade():
         sa.UniqueConstraint("workspace_id", "linkedin_post_id"),
     )
     op.execute("ALTER TABLE posts ADD COLUMN embedding vector(1536)")
-    op.execute("CREATE INDEX posts_embedding_idx ON posts USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)")
+    op.execute("CREATE INDEX posts_embedding_idx ON posts USING hnsw (embedding vector_cosine_ops)")
 
     op.create_table("alerts",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),

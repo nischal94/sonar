@@ -1,10 +1,14 @@
+import os
 from celery import Celery
-from app.config import get_settings
+
+# Read directly from env to avoid eager pydantic settings instantiation at import time.
+# Celery needs broker/backend URLs at construction; os.environ is safe at module level.
+_redis_url = os.environ.get("REDIS_URL", "redis://redis:6379/0")
 
 celery_app = Celery(
     "sonar",
-    broker=get_settings().redis_url,
-    backend=get_settings().redis_url,
+    broker=_redis_url,
+    backend=_redis_url,
     include=[
         "app.workers.pipeline",
         "app.jobs.public_poller",

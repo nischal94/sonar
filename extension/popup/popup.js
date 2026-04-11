@@ -1,5 +1,8 @@
 // extension/popup/popup.js
-const API_BASE = 'https://api.yoursonar.com'; // Change to http://localhost:8000 for dev
+async function getApiBase() {
+  const data = await chrome.storage.local.get('api_base');
+  return data.api_base || 'http://localhost:8000';
+}
 
 async function init() {
   const { auth_token, signal_count, last_sync_time } = await chrome.storage.local.get([
@@ -34,7 +37,8 @@ document.getElementById('connect-btn')?.addEventListener('click', async () => {
   const email = document.getElementById('email-input').value;
   const password = document.getElementById('password-input').value;
 
-  const resp = await fetch(`${API_BASE}/auth/token`, {
+  const apiBase = await getApiBase();
+  const resp = await fetch(`${apiBase}/auth/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: `username=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`,

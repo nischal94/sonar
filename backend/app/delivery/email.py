@@ -1,3 +1,4 @@
+import asyncio
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 from app.config import get_settings
@@ -38,4 +39,4 @@ class EmailSender:
             subject=subject,
             html_content=html,
         )
-        self._client.send(message)
+        await asyncio.to_thread(self._client.send, message)

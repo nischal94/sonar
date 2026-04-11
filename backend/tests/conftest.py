@@ -6,8 +6,6 @@ from app.main import app
 from app.database import Base, get_db
 from app.config import get_settings
 
-TEST_DATABASE_URL = get_settings().database_url.replace("/sonar", "/sonar_test")
-
 @pytest.fixture(scope="session")
 def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
@@ -16,7 +14,8 @@ def event_loop():
 
 @pytest.fixture(scope="session")
 async def test_engine():
-    engine = create_async_engine(TEST_DATABASE_URL)
+    test_db_url = get_settings().database_url.replace("/sonar", "/sonar_test")
+    engine = create_async_engine(test_db_url)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)

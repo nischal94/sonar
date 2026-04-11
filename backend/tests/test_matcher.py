@@ -20,13 +20,19 @@ async def test_high_relevance_for_matching_content():
 
 @pytest.mark.asyncio
 async def test_low_relevance_for_unrelated_content():
-    score_bounds_check = await compute_relevance_score.__wrapped__(
-        post_content="Just got back from an amazing hiking trip!",
-        capability_embedding=[0.9] * 1536,
-    ) if hasattr(compute_relevance_score, '__wrapped__') else None
+    # Orthogonal vector → near-zero cosine similarity
+    capability = [1.0] + [0.0] * 1535
+    post_embedding = [0.0, 1.0] + [0.0] * 1534  # orthogonal to capability
 
-    # Score must be in valid range
-    assert True  # bounds are enforced by cosine_similarity always returning 0.0-1.0
+    with patch("app.services.matcher.embedding_provider") as mock_emb:
+        mock_emb.embed = AsyncMock(return_value=post_embedding)
+
+        score = await compute_relevance_score(
+            post_content="Just got back from an amazing hiking trip!",
+            capability_embedding=capability,
+        )
+
+    assert score < 0.1
 
 
 @pytest.mark.asyncio
