@@ -1,4 +1,5 @@
 import pytest
+import pytest_asyncio
 import asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
@@ -12,9 +13,11 @@ def event_loop():
     yield loop
     loop.close()
 
-@pytest.fixture(scope="session")
+@pytest_asyncio.fixture
 async def test_engine():
-    test_db_url = get_settings().database_url.replace("/sonar", "/sonar_test")
+    # Swap only the trailing database name (not any earlier "/sonar" in credentials/host)
+    base_url = get_settings().database_url
+    test_db_url = base_url.rsplit("/", 1)[0] + "/sonar_test"
     engine = create_async_engine(test_db_url)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
@@ -22,13 +25,13 @@ async def test_engine():
     yield engine
     await engine.dispose()
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def db_session(test_engine):
     TestSession = async_sessionmaker(test_engine, expire_on_commit=False)
     async with TestSession() as session:
         yield session
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def client(db_session):
     async def override_get_db():
         yield db_session
