@@ -34,9 +34,14 @@ def create_access_token(user_id: UUID, workspace_id: UUID) -> str:
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)) -> User:
     try:
-        payload = jwt.decode(token, get_settings().secret_key, algorithms=[ALGORITHM])
+        payload = jwt.decode(
+            token,
+            get_settings().secret_key,
+            algorithms=[ALGORITHM],
+            options={"require": ["exp", "sub"]},
+        )
         user_id = UUID(payload["sub"])
-    except (jwt.PyJWTError, KeyError, ValueError):
+    except (jwt.PyJWTError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
