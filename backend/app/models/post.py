@@ -1,5 +1,5 @@
 from sqlalchemy import Column, String, Float, Boolean, Text, UniqueConstraint, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from app.models._types import TIMESTAMPTZ
 from pgvector.sqlalchemy import Vector
 import uuid
@@ -26,4 +26,9 @@ class Post(Base):
     matched = Column(Boolean, nullable=False, default=False)
     processed_at = Column(TIMESTAMPTZ)
     extraction_version = Column(String)
-    embedding = Column(Vector(1536))
+    embedding = Column(Vector(1536))  # added in Task 1
+    # Phase 2 JSONB additions (Task 6)
+    ring1_matches = Column(JSONB, default=list)
+    ring2_matches = Column(JSONB, default=list)
+    themes = Column(JSONB, default=list)
+    engagement_counts = Column(JSONB, default=dict)
