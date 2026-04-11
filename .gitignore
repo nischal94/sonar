@@ -1,9 +1,6 @@
 # Worktrees
 .worktrees/
 
-# Internal planning docs (specs + implementation plans)
-docs/
-
 # Python
 __pycache__/
 *.py[cod]
