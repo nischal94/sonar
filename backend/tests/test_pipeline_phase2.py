@@ -130,3 +130,172 @@ async def test_pipeline_persists_embedding_and_ring_matches(db_session, monkeypa
     assert loaded.ring1_matches == [str(signal.id)]
     assert len(loaded.ring2_matches) >= 1
     assert "data tooling" in (loaded.themes or [])
+
+
+@pytest.mark.asyncio
+async def test_pipeline_does_not_drop_posts_that_miss_keyword_filter(db_session, monkeypatch):
+    """Regression test: in Phase 1, posts without any configured keyword
+    were dropped at keyword_prefilter. Phase 2 must let these flow through
+    the scoring path so Ring 2 semantic matching can still score them."""
+    from app.workers import pipeline as pipeline_module
+    from app.services import embedding as emb_module
+    from app.config import get_settings
+
+    # Redirect pipeline's engine to the test DB (see Task 12 pattern above).
+    settings = get_settings()
+    base_url = settings.database_url
+    test_db_url = base_url.rsplit("/", 1)[0] + "/sonar_test"
+    monkeypatch.setattr(settings, "database_url", test_db_url)
+
+    ws = Workspace(
+        id=uuid.uuid4(), name="WS", plan_tier="starter", matching_threshold=0.99
+    )
+    db_session.add(ws)
+    await db_session.flush()
+
+    user = User(
+        id=uuid.uuid4(), workspace_id=ws.id, email="u2@t.com",
+        hashed_password="x", role="owner",
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    profile = CapabilityProfileVersion(
+        id=uuid.uuid4(),
+        workspace_id=ws.id,
+        version=1,
+        raw_text="We sell data tooling",
+        source="manual",
+        signal_keywords=["quantum computing"],  # intentionally won't match
+        anti_keywords=[],
+        is_active=True,
+    )
+    db_session.add(profile)
+    await db_session.flush()
+
+    dummy_emb = [0.5] * 1536
+    emb_str = "[" + ",".join(str(x) for x in dummy_emb) + "]"
+    await db_session.execute(
+        text("UPDATE capability_profile_versions SET embedding = :e WHERE id = :i"),
+        {"e": emb_str, "i": str(profile.id)},
+    )
+
+    conn = Connection(
+        id=uuid.uuid4(), workspace_id=ws.id, user_id=user.id,
+        linkedin_id="ln-2", name="Bob", degree=1,
+    )
+    db_session.add(conn)
+    await db_session.flush()
+
+    post = Post(
+        id=uuid.uuid4(),
+        workspace_id=ws.id,
+        connection_id=conn.id,
+        linkedin_post_id="ln-p-2",
+        content="Our marketing funnel is leaking prospects like crazy.",
+        post_type="post",
+        source="extension",
+    )
+    db_session.add(post)
+    await db_session.commit()
+
+    async def fake_embed(text_in):
+        return dummy_emb
+    monkeypatch.setattr(emb_module.embedding_provider, "embed", fake_embed)
+
+    await pipeline_module._run_pipeline(post.id, ws.id)
+
+    result = await db_session.execute(select(Post).where(Post.id == post.id))
+    loaded = result.scalar_one()
+    await db_session.refresh(loaded)
+    # The post MUST be processed (not left as None), and must have
+    # an embedding and relevance score even though it wasn't matched.
+    assert loaded.processed_at is not None
+    assert loaded.relevance_score is not None
+    assert loaded.ring1_matches == []  # no Ring 1 signal match
+    # Post should be marked not-matched because score < 0.99 threshold
+    assert loaded.matched is False
+
+
+@pytest.mark.asyncio
+async def test_pipeline_respects_workspace_anti_keywords(db_session, monkeypatch):
+    """Regression test for Task 12 refactor: workspace-configured anti_keywords
+    must still block ingestion after the keyword-filter gate became a scoring
+    input. The spam blocklist check should OR in anti_keywords alongside the
+    default blocklist."""
+    from app.workers import pipeline as pipeline_module
+    from app.services import embedding as emb_module
+    from app.config import get_settings
+
+    # Redirect pipeline's engine to the test DB (see Task 12 pattern above).
+    settings = get_settings()
+    base_url = settings.database_url
+    test_db_url = base_url.rsplit("/", 1)[0] + "/sonar_test"
+    monkeypatch.setattr(settings, "database_url", test_db_url)
+
+    ws = Workspace(
+        id=uuid.uuid4(), name="WS", plan_tier="starter", matching_threshold=0.1
+    )
+    db_session.add(ws)
+    await db_session.flush()
+
+    user = User(
+        id=uuid.uuid4(), workspace_id=ws.id, email="u3@t.com",
+        hashed_password="x", role="owner",
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    profile = CapabilityProfileVersion(
+        id=uuid.uuid4(),
+        workspace_id=ws.id,
+        version=1,
+        raw_text="We sell data tooling",
+        source="manual",
+        signal_keywords=[],
+        anti_keywords=["NFT", "web3"],
+        is_active=True,
+    )
+    db_session.add(profile)
+    await db_session.flush()
+
+    dummy_emb = [0.5] * 1536
+    emb_str = "[" + ",".join(str(x) for x in dummy_emb) + "]"
+    await db_session.execute(
+        text("UPDATE capability_profile_versions SET embedding = :e WHERE id = :i"),
+        {"e": emb_str, "i": str(profile.id)},
+    )
+
+    conn = Connection(
+        id=uuid.uuid4(), workspace_id=ws.id, user_id=user.id,
+        linkedin_id="ln-3", name="Carol", degree=1,
+    )
+    db_session.add(conn)
+    await db_session.flush()
+
+    post = Post(
+        id=uuid.uuid4(),
+        workspace_id=ws.id,
+        connection_id=conn.id,
+        linkedin_post_id="ln-p-3",
+        content="Just minted a new NFT collection — join the whitelist!",
+        post_type="post",
+        source="extension",
+    )
+    db_session.add(post)
+    await db_session.commit()
+
+    async def fake_embed(text_in):
+        return dummy_emb
+    monkeypatch.setattr(emb_module.embedding_provider, "embed", fake_embed)
+
+    await pipeline_module._run_pipeline(post.id, ws.id)
+
+    result = await db_session.execute(select(Post).where(Post.id == post.id))
+    loaded = result.scalar_one()
+    await db_session.refresh(loaded)
+    # Anti-keyword match: post should be processed but not matched,
+    # and no embedding work should have been done (blocklist short-circuits).
+    assert loaded.processed_at is not None
+    assert loaded.matched is False
+    assert loaded.ring1_matches == [] or loaded.ring1_matches is None
