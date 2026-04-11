@@ -4,7 +4,7 @@
 
 **Goal:** Build the data model, Ring 1/2 matching logic, and pipeline refactor that the rest of Phase 2 (wizard, dashboard, backfill, Ring 3, digest) will build on.
 
-**Architecture:** Add four new tables (`signals`, `person_signal_summary`, `company_signal_summary`, `trends`) and several columns on `posts`/`workspaces`. Refactor `pipeline.py` so the keyword filter becomes a scoring input instead of an early-exit gate. Add `ring1_matcher` (phrase matching) and `ring2_matcher` (pgvector cosine similarity against the new `signals` table). Extend the existing LLM context generator prompt to emit a `themes` field. A one-shot script backfills existing `capability_profile_versions.signal_keywords` into the new `signals` table so the migration is production-safe.
+**Architecture:** Add four new tables (`signals`, `person_signal_summary`, `company_signal_summary`, `trends`) and several columns on `posts`/`workspaces`/`connections`. Refactor `pipeline.py` so the keyword filter becomes a scoring input instead of an early-exit gate. Add `ring1_matcher` (phrase matching) and `ring2_matcher` (pgvector cosine similarity against the new `signals` table). Extend the existing LLM context generator prompt to emit a `themes` field. Roll Phase 1 schema gap fixes (missing `Post.connection_id → connections.id` FK, `connections.mutual_count`) into the Phase 2 migration. Declare `embedding` columns in the Post and CapabilityProfileVersion ORM models (the DB columns already exist from migration 001 but the ORM never declared them, so `Base.metadata.create_all` in tests was missing them — Phase 2 pipeline tests need them). A one-shot script backfills existing `capability_profile_versions.signal_keywords` into the new `signals` table so the migration is production-safe.
 
 **Tech Stack:** Python 3.11, FastAPI, SQLAlchemy 2.x (async), Alembic, Postgres + pgvector, OpenAI `text-embedding-3-small` (1536 dim), pytest + pytest-asyncio.
 
@@ -23,11 +23,11 @@
 - `backfill_signals_from_keywords.py` one-shot script
 - Integration test for end-to-end pipeline
 
-**Out of scope (later plans):**
-- Signal configuration wizard backend/frontend (Plan 2)
-- Incremental aggregation task, dashboard endpoints/frontend (Plan 3)
-- Day-one backfill, extension changes (Plan 4)
-- Ring 3 nightly clustering, weekly digest (Plan 5)
+**Out of scope (later Phase 2 plans):**
+- Signal configuration wizard backend/frontend (Wizard plan)
+- Incremental aggregation task, dashboard endpoints/frontend (Dashboard plan)
+- Day-one backfill, extension changes (Backfill plan)
+- Ring 3 nightly clustering, weekly digest (Discovery plan)
 
 ---
 
@@ -49,12 +49,13 @@
 - `backend/tests/test_context_generator_themes.py`
 
 ### Modified files
-- `backend/app/models/post.py` — add `embedding`, `ring1_matches`, `ring2_matches`, `themes`, `engagement_counts` columns
-- `backend/app/models/workspace.py` — add `Workspace.backfill_used`
-- `backend/app/services/context_generator.py` — extend prompt + `AlertContext` with `themes: list[str]`
-- `backend/app/services/scorer.py` — accept `keyword_match_strength: float` input
-- `backend/app/workers/pipeline.py` — full refactor (biggest change)
-- `backend/app/models/__init__.py` — export new models (if it exists)
+- `backend/pyproject.toml` — add `pgvector>=0.4.0` dependency (Task 1)
+- `backend/app/models/post.py` — add `embedding` column (Task 1) + JSONB additions `ring1_matches`, `ring2_matches`, `themes`, `engagement_counts` (Task 6)
+- `backend/app/models/workspace.py` — add `embedding` column on `CapabilityProfileVersion` (Task 1) + `Workspace.backfill_used` (Task 7)
+- `backend/app/models/__init__.py` — add `from app.models.<model> import <Model>` for each new Phase 2 model (Tasks 2-5)
+- `backend/app/services/context_generator.py` — extend prompt + `AlertContext` with `themes: list[str]` (Task 10)
+- `backend/app/services/scorer.py` — accept `keyword_match_strength: float` input (Task 11)
+- `backend/app/workers/pipeline.py` — full refactor (Task 12 — biggest change)
 
 Each file has one clear responsibility. Matchers are isolated, services are pure functions that take data and return data, the pipeline orchestrates them, and the models just describe shape.
 
@@ -66,7 +67,8 @@ Each file has one clear responsibility. Matchers are isolated, services are pure
 - Tests run with `cd backend && uv run pytest`. A single test is `uv run pytest tests/test_ring1_matcher.py::test_should_match_exact_phrase -v`.
 - The test database is `sonar_test` (see `conftest.py:17`). You need postgres running — `docker compose up -d db` from the repo root.
 - Follow `test_*` function-style naming consistent with existing tests (see `backend/tests/test_matcher.py` for the reference pattern).
-- When a test requires a fresh migration, the `test_engine` fixture calls `Base.metadata.create_all`, which reflects current ORM models. After adding new models in early tasks, later test runs will auto-create the new tables.
+- When a test requires a fresh schema, the `test_engine` fixture calls `Base.metadata.create_all`, which only reflects ORM-declared columns. Phase 1 added two `vector(1536)` columns via raw `op.execute` without declaring them in the ORM, so `create_all` was silently building a test DB that was missing those columns. Task 1 fixes this by installing `pgvector` and declaring `embedding` on the Post and CapabilityProfileVersion models. After Task 1, `create_all` builds the real full schema — including every embedding column — and Phase 2 pipeline tests work against it.
+- Each new Phase 2 model must be imported from `backend/app/models/__init__.py` so the SQLAlchemy metadata registry sees it before `create_all` runs. Tasks 2-5 each add their own import line. If you skip this, `create_all` will skip the new tables and every subsequent test will fail with a missing-table error.
 
 ---
 
@@ -74,6 +76,70 @@ Each file has one clear responsibility. Matchers are isolated, services are pure
 
 **Files:**
 - Create: `backend/alembic/versions/002_phase2_foundation.py`
+- Modify: `backend/pyproject.toml` (add pgvector dependency)
+- Modify: `backend/app/models/post.py` (add `embedding` column so `Base.metadata.create_all` in tests builds it — the column already exists in prod via migration 001, but the ORM was never updated)
+- Modify: `backend/app/models/workspace.py` (add `embedding` column to `CapabilityProfileVersion` for the same reason)
+
+**Why the model updates are in Task 1:** Phase 1 added `posts.embedding` and `capability_profile_versions.embedding` via raw `op.execute("ALTER TABLE ... vector(1536)")` in migration 001. The ORM models never declared those columns, so `Base.metadata.create_all` (used by `backend/tests/conftest.py:21` to build the test DB) creates those tables *without* the embedding columns. Phase 1 tests got away with this because none of them ran the full pipeline through post embeddings. Phase 2 tests do — so the test DB must have those columns. The fix is to use `pgvector.sqlalchemy.Vector` in the ORM so `create_all` builds the column. Migration 001 does not need to change.
+
+- [ ] **Step 1.0: Add pgvector Python package and update existing ORM models**
+
+Add pgvector to backend dependencies. In `backend/pyproject.toml`, find the `dependencies = [ ... ]` list and add `"pgvector>=0.4.0",` alongside the existing entries (e.g., next to `"numpy>=1.26.0"`).
+
+Then:
+
+```bash
+cd backend && uv sync
+```
+
+Expected: `pgvector` appears in the resolved dependency tree. No errors.
+
+Update `backend/app/models/post.py` — add the pgvector import and an `embedding` column. This is in addition to the Phase 2 additions that Task 6 will add. Show the final model so Task 6 only needs to layer on top of this:
+
+```python
+from sqlalchemy import Column, String, Float, Boolean, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID, TIMESTAMPTZ
+from pgvector.sqlalchemy import Vector
+import uuid
+from app.database import Base
+
+
+class Post(Base):
+    __tablename__ = "posts"
+    __table_args__ = (UniqueConstraint("workspace_id", "linkedin_post_id"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    workspace_id = Column(UUID(as_uuid=True), nullable=False)
+    connection_id = Column(UUID(as_uuid=True))
+    linkedin_post_id = Column(String, nullable=False)
+    content = Column(Text, nullable=False)
+    post_type = Column(String, nullable=False)
+    source = Column(String, nullable=False)
+    posted_at = Column(TIMESTAMPTZ)
+    ingested_at = Column(TIMESTAMPTZ, nullable=False, server_default="now()")
+    relevance_score = Column(Float)
+    relationship_score = Column(Float)
+    timing_score = Column(Float)
+    combined_score = Column(Float)
+    matched = Column(Boolean, nullable=False, default=False)
+    processed_at = Column(TIMESTAMPTZ)
+    extraction_version = Column(String)
+    embedding = Column(Vector(1536))
+```
+
+Update `backend/app/models/workspace.py` — add the pgvector import and an `embedding` column on `CapabilityProfileVersion`. Append this column after `performance_score`:
+
+```python
+# At the top of the file, next to the existing SQLAlchemy imports:
+from pgvector.sqlalchemy import Vector
+
+# In the CapabilityProfileVersion class, add after performance_score:
+    embedding = Column(Vector(1536))
+```
+
+Remove the now-outdated comment `# embedding stored via pgvector — added in migration using Vector type` if it's still present — the column is now declared in the ORM.
+
+Do not commit yet — steps 1.1-1.3 will add the migration and verify the full picture, then step 1.4 commits everything together.
 
 - [ ] **Step 1.1: Write the migration file**
 
@@ -87,6 +153,7 @@ Create Date: 2026-04-11
 from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+from pgvector.sqlalchemy import Vector
 
 revision = '002'
 down_revision = '001'
@@ -105,12 +172,12 @@ def upgrade():
         sa.Column("example_post", sa.Text()),
         sa.Column("intent_strength", sa.Float(), nullable=False, server_default="0.7"),
         sa.Column("enabled", sa.Boolean(), nullable=False, server_default="true"),
+        sa.Column("embedding", Vector(1536)),
         sa.Column("created_at", postgresql.TIMESTAMPTZ(), nullable=False, server_default=sa.text("now()")),
         sa.Column("updated_at", postgresql.TIMESTAMPTZ(), nullable=False, server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"]),
         sa.ForeignKeyConstraint(["profile_version_id"], ["capability_profile_versions.id"]),
     )
-    op.execute("ALTER TABLE signals ADD COLUMN embedding vector(1536)")
     op.execute(
         "CREATE INDEX signals_embedding_idx "
         "ON signals USING hnsw (embedding vector_cosine_ops)"
@@ -153,6 +220,11 @@ def upgrade():
         sa.ForeignKeyConstraint(["workspace_id"], ["workspaces.id"]),
         sa.UniqueConstraint("workspace_id", "company_name"),
     )
+    op.create_index(
+        "company_signal_score_idx",
+        "company_signal_summary",
+        ["workspace_id", sa.text("aggregate_score DESC")],
+    )
 
     # ── trends ──────────────────────────────────────────────────────────
     op.create_table(
@@ -183,6 +255,22 @@ def upgrade():
     op.add_column("posts", sa.Column("themes", postgresql.JSONB(), server_default="[]"))
     op.add_column("posts", sa.Column("engagement_counts", postgresql.JSONB(), server_default="{}"))
 
+    # ── Phase 1 schema gap: posts.connection_id was missing its FK constraint.
+    #    Design spec §5.1 says to roll this fix into the Phase 2 migration.
+    op.create_foreign_key(
+        "posts_connection_id_fkey",
+        "posts",
+        "connections",
+        ["connection_id"],
+        ["id"],
+    )
+
+    # ── connections column addition (powers 2nd-degree mutual-connection UI later) ──
+    op.add_column(
+        "connections",
+        sa.Column("mutual_count", sa.Integer(), nullable=False, server_default="0"),
+    )
+
     # ── workspaces column addition ──────────────────────────────────────
     op.add_column(
         "workspaces",
@@ -192,12 +280,15 @@ def upgrade():
 
 def downgrade():
     op.drop_column("workspaces", "backfill_used")
+    op.drop_column("connections", "mutual_count")
+    op.drop_constraint("posts_connection_id_fkey", "posts", type_="foreignkey")
     op.drop_column("posts", "engagement_counts")
     op.drop_column("posts", "themes")
     op.drop_column("posts", "ring2_matches")
     op.drop_column("posts", "ring1_matches")
     op.drop_index("trends_workspace_ring_snapshot_idx", "trends")
     op.drop_table("trends")
+    op.drop_index("company_signal_score_idx", "company_signal_summary")
     op.drop_table("company_signal_summary")
     op.drop_index("person_signal_score_idx", "person_signal_summary")
     op.drop_table("person_signal_summary")
@@ -241,8 +332,22 @@ Expected to see `signals columns` includes `id, workspace_id, phrase, example_po
 - [ ] **Step 1.4: Commit**
 
 ```bash
-git add backend/alembic/versions/002_phase2_foundation.py
-git commit -m "feat(db): phase 2 foundation schema migration"
+git add backend/alembic/versions/002_phase2_foundation.py \
+        backend/pyproject.toml \
+        backend/uv.lock \
+        backend/app/models/post.py \
+        backend/app/models/workspace.py
+git commit -m "feat(db): phase 2 foundation schema migration + pgvector ORM support
+
+- Adds migration 002 creating signals, person_signal_summary,
+  company_signal_summary, trends tables
+- Adds ring1_matches/ring2_matches/themes/engagement_counts to posts
+- Adds mutual_count to connections (for 2nd-degree UI in later plan)
+- Adds backfill_used to workspaces
+- Rolls in Phase 1 schema gap: posts.connection_id FK to connections.id
+- Adds pgvector>=0.4.0 dependency and declares embedding columns in
+  Post and CapabilityProfileVersion ORM models so Base.metadata.create_all
+  builds them in the test database"
 ```
 
 ---
@@ -303,8 +408,9 @@ Expected: FAIL with `ModuleNotFoundError: No module named 'app.models.signal'`
 Create `backend/app/models/signal.py`:
 
 ```python
-from sqlalchemy import Column, String, Float, Boolean, Text, ForeignKey
+from sqlalchemy import Column, Float, Boolean, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, TIMESTAMPTZ
+from pgvector.sqlalchemy import Vector
 import uuid
 from app.database import Base
 
@@ -319,9 +425,16 @@ class Signal(Base):
     example_post = Column(Text)
     intent_strength = Column(Float, nullable=False, default=0.7)
     enabled = Column(Boolean, nullable=False, default=True)
-    # embedding: vector(1536) added via migration, accessed via raw SQL or sqlalchemy-vector
+    embedding = Column(Vector(1536))
     created_at = Column(TIMESTAMPTZ, nullable=False, server_default="now()")
     updated_at = Column(TIMESTAMPTZ, nullable=False, server_default="now()")
+```
+
+Then register the model in `backend/app/models/__init__.py` so `Base.metadata` sees it:
+
+```python
+# append to backend/app/models/__init__.py (create the file if empty)
+from app.models.signal import Signal  # noqa: F401
 ```
 
 - [ ] **Step 2.4: Run test to verify it passes**
@@ -335,8 +448,10 @@ Expected: PASS.
 - [ ] **Step 2.5: Commit**
 
 ```bash
-git add backend/app/models/signal.py backend/tests/test_signal_model.py
-git commit -m "feat(models): add Signal ORM model"
+git add backend/app/models/signal.py \
+        backend/app/models/__init__.py \
+        backend/tests/test_signal_model.py
+git commit -m "feat(models): add Signal ORM model with pgvector embedding"
 ```
 
 ---
@@ -438,6 +553,13 @@ class PersonSignalSummary(Base):
     updated_at = Column(TIMESTAMPTZ, nullable=False, server_default="now()")
 ```
 
+Then register the model in `backend/app/models/__init__.py`:
+
+```python
+# append to backend/app/models/__init__.py
+from app.models.person_signal_summary import PersonSignalSummary  # noqa: F401
+```
+
 - [ ] **Step 3.4: Run test to verify it passes**
 
 ```bash
@@ -449,7 +571,9 @@ Expected: PASS.
 - [ ] **Step 3.5: Commit**
 
 ```bash
-git add backend/app/models/person_signal_summary.py backend/tests/test_person_signal_summary_model.py
+git add backend/app/models/person_signal_summary.py \
+        backend/app/models/__init__.py \
+        backend/tests/test_person_signal_summary_model.py
 git commit -m "feat(models): add PersonSignalSummary ORM model"
 ```
 
@@ -528,6 +652,13 @@ class CompanySignalSummary(Base):
     updated_at = Column(TIMESTAMPTZ, nullable=False, server_default="now()")
 ```
 
+Then register the model in `backend/app/models/__init__.py`:
+
+```python
+# append to backend/app/models/__init__.py
+from app.models.company_signal_summary import CompanySignalSummary  # noqa: F401
+```
+
 - [ ] **Step 4.4: Run test to verify it passes**
 
 ```bash
@@ -539,7 +670,9 @@ Expected: PASS.
 - [ ] **Step 4.5: Commit**
 
 ```bash
-git add backend/app/models/company_signal_summary.py backend/tests/test_company_signal_summary_model.py
+git add backend/app/models/company_signal_summary.py \
+        backend/app/models/__init__.py \
+        backend/tests/test_company_signal_summary_model.py
 git commit -m "feat(models): add CompanySignalSummary ORM model"
 ```
 
@@ -653,6 +786,13 @@ class Trend(Base):
     created_at = Column(TIMESTAMPTZ, nullable=False, server_default="now()")
 ```
 
+Then register the model in `backend/app/models/__init__.py`:
+
+```python
+# append to backend/app/models/__init__.py
+from app.models.trend import Trend  # noqa: F401
+```
+
 - [ ] **Step 5.4: Run tests to verify they pass**
 
 ```bash
@@ -664,7 +804,9 @@ Expected: Both tests PASS.
 - [ ] **Step 5.5: Commit**
 
 ```bash
-git add backend/app/models/trend.py backend/tests/test_trend_model.py
+git add backend/app/models/trend.py \
+        backend/app/models/__init__.py \
+        backend/tests/test_trend_model.py
 git commit -m "feat(models): add Trend ORM model"
 ```
 
@@ -725,11 +867,12 @@ Expected: FAIL with `TypeError` about unexpected keyword argument `ring1_matches
 
 - [ ] **Step 6.3: Update the Post model**
 
-Modify `backend/app/models/post.py` to add new columns. Full file contents:
+Modify `backend/app/models/post.py` to add the new Phase 2 columns. Task 1 already added the `embedding = Column(Vector(1536))` line and the `pgvector` import; this step layers the JSONB columns on top. Full file contents after this step:
 
 ```python
 from sqlalchemy import Column, String, Float, Boolean, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, TIMESTAMPTZ, JSONB
+from pgvector.sqlalchemy import Vector
 import uuid
 from app.database import Base
 
@@ -754,7 +897,8 @@ class Post(Base):
     matched = Column(Boolean, nullable=False, default=False)
     processed_at = Column(TIMESTAMPTZ)
     extraction_version = Column(String)
-    # Phase 2 additions
+    embedding = Column(Vector(1536))  # added in Task 1
+    # Phase 2 JSONB additions
     ring1_matches = Column(JSONB, default=list)
     ring2_matches = Column(JSONB, default=list)
     themes = Column(JSONB, default=list)
@@ -1762,8 +1906,15 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
 
         # Hard spam blocklist stays as a pre-check — only posts about birthdays,
         # new jobs, etc. are dropped. This is NOT the keyword filter.
+        #
+        # Workspace-configured anti_keywords are still honored here so the
+        # Phase 1 behavior is preserved — Ring 2 semantic matching should not
+        # rescue posts the workspace explicitly told us to ignore.
         content_lower = post.content.lower()
-        if any(term in content_lower for term in DEFAULT_BLOCKLIST):
+        full_blocklist = DEFAULT_BLOCKLIST + [
+            kw.lower() for kw in (profile.anti_keywords or [])
+        ]
+        if any(term in content_lower for term in full_blocklist):
             await db.execute(
                 update(Post).where(Post.id == post_id)
                 .values(processed_at=datetime.now(timezone.utc), matched=False)
@@ -2069,7 +2220,85 @@ cd backend && uv run python -c "import ast; ast.parse(open('scripts/backfill_sig
 
 Expected: no output (parse succeeds).
 
-- [ ] **Step 13.3: Run the script against the dev database**
+- [ ] **Step 13.3: Write a smoke test for the backfill logic**
+
+Create `backend/tests/test_backfill_signals_script.py`:
+
+```python
+import pytest
+import uuid
+from sqlalchemy import select
+from unittest.mock import AsyncMock, patch
+from app.models.workspace import Workspace, CapabilityProfileVersion
+from app.models.signal import Signal
+
+
+@pytest.mark.asyncio
+async def test_backfill_creates_signals_from_capability_profile_keywords(
+    db_session, monkeypatch
+):
+    """Smoke test: given an active capability profile with signal_keywords,
+    the backfill function creates one Signal row per keyword with a stored
+    embedding."""
+    ws = Workspace(id=uuid.uuid4(), name="WS Backfill", plan_tier="starter")
+    db_session.add(ws)
+    await db_session.flush()
+
+    profile = CapabilityProfileVersion(
+        id=uuid.uuid4(),
+        workspace_id=ws.id,
+        version=1,
+        raw_text="We sell data tooling",
+        source="manual",
+        signal_keywords=["data pipeline", "ETL migration", "ingest bottleneck"],
+        is_active=True,
+    )
+    db_session.add(profile)
+    await db_session.commit()
+
+    # Mock the embedding provider so the smoke test doesn't call OpenAI
+    fake_embedding = [0.42] * 1536
+    from app.services import embedding as emb_module
+    monkeypatch.setattr(
+        emb_module.embedding_provider,
+        "embed",
+        AsyncMock(return_value=fake_embedding),
+    )
+
+    # Import after monkey-patch so the module uses the patched provider
+    from scripts.backfill_signals_from_keywords import main as backfill_main
+
+    # The backfill script creates its own engine/session from settings.
+    # For the smoke test we patch create_async_engine to return the test engine.
+    from scripts import backfill_signals_from_keywords as backfill_module
+    monkeypatch.setattr(
+        backfill_module,
+        "create_async_engine",
+        lambda *args, **kwargs: db_session.bind,
+    )
+    # Prevent the script from disposing the shared test engine
+    monkeypatch.setattr(db_session.bind, "dispose", AsyncMock())
+
+    await backfill_main()
+
+    # Re-query on the same session — signals should now exist for this workspace
+    result = await db_session.execute(
+        select(Signal).where(Signal.workspace_id == ws.id)
+    )
+    signals = result.scalars().all()
+    phrases = sorted(s.phrase for s in signals)
+    assert phrases == ["ETL migration", "data pipeline", "ingest bottleneck"]
+```
+
+Run:
+
+```bash
+cd backend && uv run pytest tests/test_backfill_signals_script.py -v
+```
+
+Expected: PASS. If the patching is tricky (the script owns its own session), it is acceptable to instead refactor `backfill_signals_from_keywords.py` to expose a `async def run(db)` helper that the `main()` wrapper calls with a real session, and test `run(db)` directly. Either approach is fine — the goal is a test that provably exercises the INSERT logic with a mocked embedding provider.
+
+- [ ] **Step 13.4: Run the script against the dev database**
 
 ```bash
 cd backend && uv run python scripts/backfill_signals_from_keywords.py
@@ -2077,7 +2306,7 @@ cd backend && uv run python scripts/backfill_signals_from_keywords.py
 
 Expected output: `[backfill] done. created=N skipped_profiles=M` where N and M depend on existing seeded data.
 
-- [ ] **Step 13.4: Verify signals were created**
+- [ ] **Step 13.5: Verify signals were created**
 
 ```bash
 cd backend && uv run python -c "
@@ -2099,10 +2328,11 @@ asyncio.run(check())
 
 Expected: non-zero count if there were active profiles with `signal_keywords`.
 
-- [ ] **Step 13.5: Commit**
+- [ ] **Step 13.6: Commit**
 
 ```bash
-git add backend/scripts/backfill_signals_from_keywords.py
+git add backend/scripts/backfill_signals_from_keywords.py \
+        backend/tests/test_backfill_signals_script.py
 git commit -m "feat(scripts): add one-shot backfill from signal_keywords to signals table"
 ```
 
@@ -2195,15 +2425,96 @@ async def test_pipeline_does_not_drop_posts_that_miss_keyword_filter(db_session,
     assert loaded.matched is False
 ```
 
-- [ ] **Step 14.2: Run the full phase 2 pipeline tests**
+- [ ] **Step 14.2: Add a regression test for workspace `anti_keywords`**
+
+Append to `backend/tests/test_pipeline_phase2.py`:
+
+```python
+@pytest.mark.asyncio
+async def test_pipeline_respects_workspace_anti_keywords(db_session, monkeypatch):
+    """Regression test for Task 12 refactor: workspace-configured anti_keywords
+    must still block ingestion after the keyword-filter gate became a scoring
+    input. The spam blocklist check should OR in anti_keywords alongside the
+    default blocklist."""
+    from app.workers import pipeline as pipeline_module
+    from app.services import embedding as emb_module
+
+    ws = Workspace(
+        id=uuid.uuid4(), name="WS", plan_tier="starter", matching_threshold=0.1
+    )
+    db_session.add(ws)
+    await db_session.flush()
+
+    user = User(
+        id=uuid.uuid4(), workspace_id=ws.id, email="u3@t.com",
+        hashed_password="x", role="owner",
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    profile = CapabilityProfileVersion(
+        id=uuid.uuid4(),
+        workspace_id=ws.id,
+        version=1,
+        raw_text="We sell data tooling",
+        source="manual",
+        signal_keywords=[],
+        anti_keywords=["NFT", "web3"],
+        is_active=True,
+    )
+    db_session.add(profile)
+    await db_session.flush()
+
+    dummy_emb = [0.5] * 1536
+    emb_str = "[" + ",".join(str(x) for x in dummy_emb) + "]"
+    await db_session.execute(
+        text("UPDATE capability_profile_versions SET embedding = :e WHERE id = :i"),
+        {"e": emb_str, "i": str(profile.id)},
+    )
+
+    conn = Connection(
+        id=uuid.uuid4(), workspace_id=ws.id, user_id=user.id,
+        linkedin_id="ln-3", name="Carol", degree=1,
+    )
+    db_session.add(conn)
+    await db_session.flush()
+
+    post = Post(
+        id=uuid.uuid4(),
+        workspace_id=ws.id,
+        connection_id=conn.id,
+        linkedin_post_id="ln-p-3",
+        content="Just minted a new NFT collection — join the whitelist!",
+        post_type="post",
+        source="extension",
+    )
+    db_session.add(post)
+    await db_session.commit()
+
+    async def fake_embed(text_in):
+        return dummy_emb
+    monkeypatch.setattr(emb_module.embedding_provider, "embed", fake_embed)
+
+    await pipeline_module._run_pipeline(post.id, ws.id)
+
+    result = await db_session.execute(select(Post).where(Post.id == post.id))
+    loaded = result.scalar_one()
+    # Anti-keyword match: post should be processed but not matched,
+    # and no embedding work should have been done (blocklist short-circuits).
+    assert loaded.processed_at is not None
+    assert loaded.matched is False
+    assert loaded.ring1_matches == [] or loaded.ring1_matches is None
+```
+
+- [ ] **Step 14.3: Run the full phase 2 pipeline tests**
 
 ```bash
 cd backend && uv run pytest tests/test_pipeline_phase2.py -v
 ```
 
-Expected: All tests PASS, including the new regression test.
+Expected: All tests PASS, including the regression tests from 14.1 and 14.2.
 
-- [ ] **Step 14.3: Run the full backend test suite one last time**
+- [ ] **Step 14.4: Run the full backend test suite one last time**
 
 ```bash
 cd backend && uv run pytest -v
@@ -2211,11 +2522,11 @@ cd backend && uv run pytest -v
 
 Expected: every test passes. No Phase 1 regressions, all new Phase 2 foundation tests green.
 
-- [ ] **Step 14.4: Commit**
+- [ ] **Step 14.5: Commit**
 
 ```bash
 git add backend/tests/test_pipeline_phase2.py
-git commit -m "test(pipeline): regression test for non-keyword-matching posts"
+git commit -m "test(pipeline): regression tests for non-keyword-match and anti_keywords paths"
 ```
 
 ---
@@ -2238,7 +2549,7 @@ Before opening the PR against main, manually verify:
 git push -u origin feat/phase-2-foundation
 gh pr create --base main --head feat/phase-2-foundation \
   --title "feat: Phase 2 Foundation — data model, Ring 1/2 matching, pipeline refactor" \
-  --body "See docs/superpowers/specs/2026-04-11-sonar-phase-2-design.md for design. Implements Plan 1 of 5 per docs/superpowers/plans/2026-04-11-sonar-phase-2-foundation.md."
+  --body "See docs/phase-2/design.md for design. Implements the Foundation plan at docs/phase-2/foundation.md."
 ```
 
 Do not merge without user review.
