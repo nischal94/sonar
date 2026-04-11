@@ -153,6 +153,48 @@ Every Phase 2+ contribution aims to meet these. When skipping something, call it
 
 ---
 
+## Lessons Learned — Rules Codified from Prior Sessions
+
+The rules below were added after specific failures in prior Claude Code sessions. Each references the Sonar issue / PR where the bug manifested so the pattern is traceable. When you hit a similar pattern, apply these rules without waiting to rediscover them.
+
+### Python test mocking: prefer DI, patch at the lookup site
+
+`unittest.mock.patch("X.Y")` does NOT affect importers that did `from X import Y` at module load time — the importer has its own local binding that the patch never touches. This bug shipped **twice** in Sonar before being fixed structurally:
+
+- **Issue #6 / PR #16** — `test_delivery_router.py` patched `app.delivery.router.SlackSender`, but `CHANNEL_SENDERS` held a direct reference to the class captured at import time. The real `SlackSender` ran, raised, `asyncio.gather(return_exceptions=True)` swallowed the error, and the mock assertion failed with a confusing "not called" message.
+- **Issue #11 / PR #20** — `test_e2e.py` patched `app.services.embedding.embedding_provider`, but `app.routers.profile` had already done `from app.services.embedding import embedding_provider`. The router's local binding was untouched; the real `_LazyEmbeddingProvider` instantiated a client with the placeholder API key and 401'd.
+
+**Rule when adding or modifying Python tests:**
+
+1. **Router-layer dependencies** — use FastAPI `Depends()`. Tests use `app.dependency_overrides[get_provider] = lambda: fake`. The override layer sits above Python's import binding and cannot be defeated by `from ... import ...`. See `backend/app/services/embedding.py::get_embedding_provider`, `backend/app/services/llm.py::get_llm_client`, and `backend/app/routers/profile.py::extract_profile` for the canonical pattern.
+2. **Service-layer dependencies** — use constructor injection with a module-level default. Tests pass a fake directly. See `backend/app/delivery/router.py::DeliveryRouter(senders=...)` for the canonical pattern.
+3. **When `patch()` is unavoidable** — patch at the *lookup site* (the module that references the name), not the *definition site*. Example: `patch("app.routers.profile.embedding_provider")`, not `patch("app.services.embedding.embedding_provider")`.
+4. **Never introduce a new module-level singleton without a `get_*` factory or a constructor-injected seam.** The footgun only exists when there's a singleton and no DI path.
+
+### asyncio.gather: iterate results, re-raise CancelledError
+
+`await asyncio.gather(*tasks, return_exceptions=True)` returns exception objects as values. Discarding the return value silently drops every failure — no log, no metric, no breadcrumb. This was the systemic weakness that let issue #6 hide for months: the real `SlackSender` was raising, `gather` swallowed it, the mock assertion failed with a confusing "not called" error. Codified in PRs #24 (issue #18) and #39 (issue #25).
+
+**Rule when calling `asyncio.gather(..., return_exceptions=True)`:**
+
+1. **Always iterate results.** Never discard the return value.
+2. **Correlate each result to its input** via a parallel list captured in the same loop pass (e.g. `invoked_channels` alongside `tasks` in `DeliveryRouter.deliver`). A failure log must be able to name the failing component.
+3. **Re-raise `CancelledError` before the generic `Exception` check.** `asyncio.CancelledError` inherits from `BaseException`, not `Exception`, so `isinstance(result, Exception)` silently skips it. Swallowing cancellation violates structured concurrency — if the outer task was cancelled, propagate it. See `backend/app/delivery/router.py::DeliveryRouter.deliver` for the canonical pattern.
+4. **Log each exception** with the repo's `[Module] Operation failed: reason. context=...` format from `~/.claude/rules/error-messages.md`, passing `exc_info=result` to preserve the stack trace.
+
+### Frontend dependency bumps require a human in the browser
+
+Sonar's frontend (`frontend/`) has **no automated integration tests**. `npm run build` succeeds if the bundle compiles — it proves nothing about whether React rendering, routing, auth flow, form submission, or dashboard interactions actually work at runtime. The backend suite (54/54 green) says nothing about a React or React Router regression. Codified from the April 2026 dependency-audit session (issue #40).
+
+**Rule when evaluating frontend dependency PRs:**
+
+1. **Minor/point bumps in the same major line** — verify `npm run build` succeeds, then merge.
+2. **Major version bumps** (React, Vite, `react-router-dom`, `@vitejs/plugin-react`, `react-dom`) — never blind-merge. These packages are tightly coupled; they must be evaluated as ONE coordinated upgrade, not individually.
+3. **Any frontend major bump** — requires a human running `docker compose up -d frontend`, navigating every route in the browser, and exercising auth + ingest + alerts before the PR merges. If no human is available, defer via a tracking issue and close the PR with a reference. Issue #40 is the canonical template.
+4. **Do not trust the backend test suite** for frontend regressions. Backend 54/54 green says nothing about dashboard behavior.
+
+---
+
 ## Development Environment
 
 **The Sonar dev stack runs entirely inside Docker containers.** You do NOT need Python, `uv`, postgres, or pgvector installed on the host. The `api` container has everything.
