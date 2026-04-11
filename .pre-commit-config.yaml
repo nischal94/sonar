@@ -1,0 +1,46 @@
+# Pre-commit hooks — https://pre-commit.com
+#
+# Runs locally on `git commit`. Catches problems before they reach CI:
+# trailing whitespace, EOF newlines, yaml/json syntax, large files,
+# merge conflict markers, accidentally committed private keys, and
+# secret leaks via gitleaks. Plus ruff lint + format on Python files.
+#
+# Install once per clone:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Run manually across all files:
+#   pre-commit run --all-files
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-json
+      - id: check-toml
+      - id: check-added-large-files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: ['--fix=lf']
+
+  # ruff lint + format for Python (replaces flake8, black, isort in one tool).
+  # Matches the advisory check in .github/workflows/ci.yml backend-lint job.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+
+  # gitleaks — catches API keys, tokens, and private credentials before
+  # they land in history. More aggressive than detect-private-key above.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks

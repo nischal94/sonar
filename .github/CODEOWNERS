@@ -1,0 +1,15 @@
+# CODEOWNERS — https://docs.github.com/en/repositories/managing-your-repositories-settings-and-features/customizing-your-repository/about-code-owners
+#
+# Every file in the repo is owned by @nischal94 for now. GitHub uses this
+# to auto-request review on PRs. Since this is a solo-maintained project,
+# a wildcard entry is enough — it just ensures every PR is marked as
+# "awaiting review from nischal94" for consistency.
+#
+# When collaborators arrive, split by subdirectory:
+#   /backend/           @nischal94 @backend-lead
+#   /frontend/          @nischal94 @frontend-lead
+#   /extension/         @nischal94
+#   /.github/           @nischal94
+#   /docs/              @nischal94
+
+*       @nischal94

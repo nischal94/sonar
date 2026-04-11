@@ -1,0 +1,45 @@
+name: PR Title Lint
+
+# Enforces Conventional Commits on PR titles. Release-please depends on
+# this — a PR titled "Fix bug" instead of "fix: reject expired tokens"
+# silently disappears from the auto-generated CHANGELOG because the
+# conventional-commit parser can't classify it.
+#
+# Uses `pull_request_target` (not `pull_request`) because this action
+# needs write permission to set a status check on the PR. It's safe:
+# the action only reads the PR title, never checks out PR code, so
+# there's no injection surface from fork PRs.
+
+on:
+  pull_request_target:
+    types:
+      - opened
+      - edited
+      - synchronize
+      - reopened
+
+permissions:
+  pull-requests: read
+  statuses: write
+
+jobs:
+  lint:
+    name: Validate PR title
+    runs-on: ubuntu-latest
+    steps:
+      - uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            chore
+            refactor
+            test
+            perf
+            build
+            ci
+            revert
+          requireScope: false
