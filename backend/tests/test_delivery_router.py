@@ -109,3 +109,7 @@ async def test_router_logs_channel_failure_and_continues_siblings(caplog):
     assert "slack webhook 500" in msg
     assert str(alert.id) in msg
     assert str(workspace.id) in msg
+    # Pin the `exc_info=result` kwarg so a regression that drops it (silently
+    # losing the stack trace in logs) fails loudly instead of sneaking through.
+    assert failure_records[0].exc_info is not None
+    assert failure_records[0].exc_info[1] is slack_instance.send.side_effect
