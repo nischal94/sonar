@@ -1,6 +1,9 @@
 import asyncio
+import logging
 from uuid import UUID
 from app.workers.celery_app import celery_app
+
+logger = logging.getLogger(__name__)
 
 
 @celery_app.task(name="app.workers.pipeline.process_post_pipeline", bind=True, max_retries=3)
@@ -100,6 +103,19 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
         capability_embedding = json.loads(emb_str) if emb_str else None
 
         if capability_embedding is None:
+            # Workspace has a capability profile but no embedding yet. Mark the
+            # post processed so it isn't retried forever, and log loudly so the
+            # operator knows to re-run profile extraction for this workspace.
+            logger.warning(
+                "pipeline_skipped_missing_capability_embedding "
+                "workspace_id=%s profile_id=%s post_id=%s",
+                workspace_id, profile.id, post_id,
+            )
+            await db.execute(
+                update(Post).where(Post.id == post_id)
+                .values(processed_at=datetime.now(timezone.utc), matched=False)
+            )
+            await db.commit()
             await engine.dispose()
             return
 

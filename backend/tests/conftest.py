@@ -1,17 +1,17 @@
-import pytest
 import pytest_asyncio
-import asyncio
 from httpx import AsyncClient, ASGITransport
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from app.main import app
 from app.database import Base, get_db
 from app.config import get_settings
 
-@pytest.fixture(scope="session")
-def event_loop():
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
+# Note: no user-defined `event_loop` fixture.
+# pytest-asyncio 1.x supplies a function-scoped event loop by default,
+# which is what `test_engine` (function-scoped) expects. A previous
+# session-scoped override of `event_loop` was silently ignored by
+# pytest-asyncio 1.x (DeprecationWarning) but would break under 2.x;
+# it was removed as part of the Phase 2 Foundation pre-merge cleanup.
+# Configured via `pyproject.toml [tool.pytest.ini_options]`.
 
 @pytest_asyncio.fixture
 async def test_engine():
