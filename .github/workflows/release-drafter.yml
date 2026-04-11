@@ -1,0 +1,34 @@
+name: Release Drafter
+
+# Runs on every push to main (to update the draft release) and on every PR
+# event (so the autolabeler can label PRs from conventional commit titles
+# before they merge). The combination means: label → merge → draft release
+# auto-updates with the merged PR under the right category, zero manual steps.
+#
+# A release is *drafted*, not published. When it's time to ship, a human
+# publishes the draft from the GitHub Releases UI.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request_target:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - edited
+
+permissions:
+  contents: read
+
+jobs:
+  update_release_draft:
+    permissions:
+      contents: write
+      pull-requests: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: release-drafter/release-drafter@v6
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
