@@ -1,6 +1,6 @@
 import pytest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 from app.delivery.router import DeliveryRouter
 
@@ -50,13 +50,9 @@ async def test_router_calls_slack_for_configured_workspace():
 
     mock_class, mock_instance = _mock_sender_class()
 
-    # Patch the CHANNEL_SENDERS dict directly. Patching `app.delivery.router.SlackSender`
-    # does NOT work because CHANNEL_SENDERS was populated at import time with a direct
-    # reference to the original SlackSender class — the dict entry doesn't follow
-    # subsequent rebinding of the module-level name.
-    with patch.dict("app.delivery.router.CHANNEL_SENDERS", {"slack": mock_class}):
-        router = DeliveryRouter()
-        await router.deliver(alert=alert, workspace=workspace)
+    # Constructor-inject a fake sender registry — no module-level patching needed.
+    router = DeliveryRouter(senders={"slack": mock_class})
+    await router.deliver(alert=alert, workspace=workspace)
 
     mock_instance.send.assert_called_once()
     # Verify the sender was called with both alert and workspace
@@ -72,8 +68,7 @@ async def test_router_skips_channel_below_min_priority():
 
     mock_class, mock_instance = _mock_sender_class()
 
-    with patch.dict("app.delivery.router.CHANNEL_SENDERS", {"slack": mock_class}):
-        router = DeliveryRouter()
-        await router.deliver(alert=alert, workspace=workspace)
+    router = DeliveryRouter(senders={"slack": mock_class})
+    await router.deliver(alert=alert, workspace=workspace)
 
     mock_instance.send.assert_not_called()
