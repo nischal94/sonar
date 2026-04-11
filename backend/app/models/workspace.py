@@ -1,6 +1,7 @@
 from sqlalchemy import Column, String, Float, Boolean, Integer, ARRAY, Text, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from app.models._types import TIMESTAMPTZ
+from pgvector.sqlalchemy import Vector
 from sqlalchemy.orm import relationship
 import uuid
 from app.database import Base
@@ -30,12 +31,12 @@ class CapabilityProfileVersion(Base):
     workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id"), nullable=False)
     version = Column(Integer, nullable=False)
     raw_text = Column(Text, nullable=False)
-    # embedding stored via pgvector — added in migration using Vector type
     source = Column(String, nullable=False)
     signal_keywords = Column(ARRAY(Text))
     anti_keywords = Column(ARRAY(Text))
     is_active = Column(Boolean, nullable=False, default=True)
     performance_score = Column(Float)
+    embedding = Column(Vector(1536))
     created_at = Column(TIMESTAMPTZ, nullable=False, server_default="now()")
 
     workspace = relationship("Workspace", back_populates="capability_versions")

@@ -1,8 +1,10 @@
 from sqlalchemy import Column, String, Float, Boolean, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID
 from app.models._types import TIMESTAMPTZ
+from pgvector.sqlalchemy import Vector
 import uuid
 from app.database import Base
+
 
 class Post(Base):
     __tablename__ = "posts"
@@ -24,3 +26,4 @@ class Post(Base):
     matched = Column(Boolean, nullable=False, default=False)
     processed_at = Column(TIMESTAMPTZ)
     extraction_version = Column(String)
+    embedding = Column(Vector(1536))
