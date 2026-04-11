@@ -1,11 +1,11 @@
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 from uuid import uuid4
 from app.delivery.router import DeliveryRouter
 
 
 def make_alert(priority: str = "high"):
-    from types import SimpleNamespace
     return SimpleNamespace(
         id=uuid4(),
         workspace_id=uuid4(),
@@ -23,12 +23,24 @@ def make_alert(priority: str = "high"):
     )
 
 
-def make_workspace_with_slack():
-    from types import SimpleNamespace
+def make_workspace_with_slack(min_priority: str = "low"):
     return SimpleNamespace(
         id=uuid4(),
-        delivery_channels={"slack": {"webhook_url": "https://hooks.slack.com/test", "min_priority": "low"}},
+        delivery_channels={
+            "slack": {
+                "webhook_url": "https://hooks.slack.com/test",
+                "min_priority": min_priority,
+            }
+        },
     )
+
+
+def _mock_sender_class():
+    """Build a sender-class mock that returns a mock instance whose .send is an AsyncMock."""
+    mock_instance = MagicMock()
+    mock_instance.send = AsyncMock()
+    mock_class = MagicMock(return_value=mock_instance)
+    return mock_class, mock_instance
 
 
 @pytest.mark.asyncio
@@ -36,33 +48,32 @@ async def test_router_calls_slack_for_configured_workspace():
     alert = make_alert(priority="high")
     workspace = make_workspace_with_slack()
 
-    with patch("app.delivery.router.SlackSender") as MockSlack:
-        mock_instance = MagicMock()
-        mock_instance.send = AsyncMock()
-        MockSlack.return_value = mock_instance
+    mock_class, mock_instance = _mock_sender_class()
 
+    # Patch the CHANNEL_SENDERS dict directly. Patching `app.delivery.router.SlackSender`
+    # does NOT work because CHANNEL_SENDERS was populated at import time with a direct
+    # reference to the original SlackSender class — the dict entry doesn't follow
+    # subsequent rebinding of the module-level name.
+    with patch.dict("app.delivery.router.CHANNEL_SENDERS", {"slack": mock_class}):
         router = DeliveryRouter()
         await router.deliver(alert=alert, workspace=workspace)
 
-        mock_instance.send.assert_called_once()
+    mock_instance.send.assert_called_once()
+    # Verify the sender was called with both alert and workspace
+    _, kwargs = mock_instance.send.call_args
+    assert kwargs["alert"] is alert
+    assert kwargs["workspace"] is workspace
 
 
 @pytest.mark.asyncio
 async def test_router_skips_channel_below_min_priority():
     alert = make_alert(priority="low")
-    workspace_with_high_threshold = __import__("types").SimpleNamespace(
-        id=uuid4(),
-        delivery_channels={
-            "slack": {"webhook_url": "https://hooks.slack.com/test", "min_priority": "high"}
-        },
-    )
+    workspace = make_workspace_with_slack(min_priority="high")
 
-    with patch("app.delivery.router.SlackSender") as MockSlack:
-        mock_instance = MagicMock()
-        mock_instance.send = AsyncMock()
-        MockSlack.return_value = mock_instance
+    mock_class, mock_instance = _mock_sender_class()
 
+    with patch.dict("app.delivery.router.CHANNEL_SENDERS", {"slack": mock_class}):
         router = DeliveryRouter()
-        await router.deliver(alert=alert, workspace=workspace_with_high_threshold)
+        await router.deliver(alert=alert, workspace=workspace)
 
-        mock_instance.send.assert_not_called()
+    mock_instance.send.assert_not_called()
