@@ -46,8 +46,13 @@ async def test_full_pipeline_end_to_end(client):
         "capability_summary": "We build custom AI agents for SaaS automation."
     }'''
 
+    # Patch where the names are looked up, not where they're defined:
+    # `app.routers.profile` does `from app.services.embedding import embedding_provider`
+    # at import time, so patching `app.services.embedding.embedding_provider` does not
+    # affect the router's local binding. Same rule applies to `llm_client` in
+    # `profile_extractor`, which already uses the correct path.
     with patch("app.services.profile_extractor.llm_client") as mock_llm, \
-         patch("app.services.embedding.embedding_provider") as mock_emb:
+         patch("app.routers.profile.embedding_provider") as mock_emb:
         mock_llm.complete = AsyncMock(return_value=mock_profile_json)
         mock_emb.embed = AsyncMock(return_value=[0.5] * 1536)
 
