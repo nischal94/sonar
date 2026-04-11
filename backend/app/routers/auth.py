@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update as sa_update
 from passlib.context import CryptContext
-from jose import JWTError, jwt
+import jwt
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 from app.database import get_db
@@ -36,7 +36,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
     try:
         payload = jwt.decode(token, get_settings().secret_key, algorithms=[ALGORITHM])
         user_id = UUID(payload["sub"])
-    except (JWTError, KeyError, ValueError):
+    except (jwt.PyJWTError, KeyError, ValueError):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
