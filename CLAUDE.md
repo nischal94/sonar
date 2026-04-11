@@ -77,6 +77,82 @@ Branch naming: `feat/<scope>-<short-description>`, `fix/<bug>`, `chore/<topic>`,
 
 ---
 
+## Engineering Standards
+
+Every Phase 2+ contribution aims to meet these. When skipping something, call it out explicitly in the PR.
+
+### CI and code quality
+- **CI must run on every PR** — build, test, lint, format check, type check. Currently missing; highest-priority tech debt.
+- **Single linter/formatter per language** — `ruff` for Python, `biome` (or `eslint`+`prettier`) for TS. Green on every PR.
+- **Pre-commit hooks** — block secrets, trailing whitespace, large files, lint violations before the commit happens.
+- **Type checking in CI** — `mypy` or `pyright` on Python, `tsc --noEmit` on TS. Start permissive, tighten over time.
+
+### Testing
+- **Green main, always.** No "N failures are pre-existing, it's fine" baselines. Every failing test is either fixed, deleted, or tracked as a GitHub issue with a deadline.
+- **Deterministic tests** — no `datetime.now()`, no unseeded random, no network. Use `freezegun` / seeded fixtures.
+- **Test behavior, not implementation.** Assert on observable outcomes. Mock only at system boundaries (LLM providers, external HTTP, email/SMS).
+- **Test coverage is a floor, not a ceiling.** 70-85% meaningful > 100% trivial. `pytest --cov` reported per PR.
+
+### Security
+- **Secrets in `.env` (gitignored) for dev only.** Production secrets come from a secrets manager at deploy time. `SECRET_KEY` rotates on a schedule.
+- **Rate limiting on `/auth/token`** and any endpoint that checks credentials. Required before launch.
+- **JWT with `algorithms=[...]` always.** Never trust the `alg` header. Enforced in `auth.py` (PR #4).
+- **All user input validated at the boundary via Pydantic.** Never trust LLM output, LinkedIn post content, or webhook payloads without validation. Parameterized SQL always; never f-string a query.
+- **PII and GDPR:** user data has a documented retention policy. Data export and deletion endpoints must exist before launch.
+
+### LLM and agent discipline — Sonar is LLM-heavy; read carefully
+- **Prompts are code.** Live in `app/prompts/<name>.py`, version-controlled, reviewed on every change. No dynamic string-building into system prompts.
+- **`max_tokens` on every LLM call.** No exceptions. Input token count estimated before sending to catch blowup early.
+- **Cost tracked per workspace/feature.** Log `{workspace_id, feature, input_tokens, output_tokens, cost_usd}` on every call. Hard per-workspace daily cap so runaway loops can't eat the budget.
+- **Single routing layer for model selection.** Cheap models (Groq) for bulk work; expensive models (GPT-4o-mini) for critical work. Fallback chains defined explicitly.
+- **Prompt injection defense is mandatory.** User-controlled input (LinkedIn post content!) goes in the **user message** position only. Never f-string user input into the system prompt.
+- **LLM output is untrusted.** Parse with Pydantic / strict JSON schemas. Retry on parse failure (budget: 2 retries). Never pass output directly to shell / SQL / file paths without validation.
+- **Structured outputs where supported.** OpenAI `response_format=<PydanticModel>` is the default path.
+- **Embedding model consistency.** `text-embedding-3-small` (1536 dim) is the single system embedding. Never mix models; it silently breaks cosine similarity.
+- **Eval datasets for LLM features.** Golden dataset + CI gate for every prompt-dependent feature before it ships. Required for Ring 2 semantic matching, context generator, and future signal proposal wizard.
+- **Response caching** by hash of `(provider, model, prompt, temperature)`. Embeddings especially — cache by content hash; it's the highest-leverage cost reduction we can make.
+- **Temperature = 0 for classifiers and extractors**, higher (0.5-0.8) for creative tasks (outreach drafts, summaries). Document the choice per prompt.
+- **Human-in-the-loop for high-stakes LLM decisions** — outreach drafts, signal proposals, anything customer-facing needs a review queue.
+
+### Agent workflow — how Claude Code sessions work on this project
+- **Read this file in full at session start.** Everything you need is here. If it's out of date, update it in the same commit as the state change — never "cleanup PR later."
+- **Verify before trusting memory or stale context.** Before claiming a file or resource exists, verify with `ls` / `git` / `gh api`. In-session context ages within a single session; stored memory ages faster.
+- **Code review means dispatching `superpowers:code-reviewer`, not self-review.** Never merge without it.
+- **Two-stage review after each task** — spec compliance first, then code quality. Both mandatory; skipping them violates the subagent-driven-development skill.
+- **Multi-task plans use `superpowers:subagent-driven-development`** — fresh subagent per task, never batched into one dispatch.
+- **Answer subagent questions completely before letting them proceed.** Questions before work are free; guesses after work are expensive.
+- **Don't delegate understanding.** The controller must understand the task well enough to judge the result. "Figure it out for me" is an anti-pattern.
+
+### Observability — required before launch
+- **Structured logging** via `structlog` with request-ID correlation threading HTTP → Celery → DB.
+- **Error tracking** (Sentry or equivalent) capturing every unhandled exception in prod with stack trace + correlation ID.
+- **Metrics exported** (Prometheus format via `prometheus-fastapi-instrumentator`): request rate, error rate, p99 latency, Celery queue depth, DB connection pool usage.
+- **Health checks split: liveness vs readiness.** `/health/live` for orchestrator restart decisions, `/health/ready` for load-balancer routing.
+- **Database backups** with a documented, tested restore drill.
+- **LLM cost metric per workspace** as a first-class dashboard.
+
+### Database and migrations
+- **Every migration has a working `downgrade()`.** Tested against realistic data before merge (`alembic upgrade head && alembic downgrade -1 && alembic upgrade head`).
+- **Expand / contract pattern for breaking schema changes.** Never rename or drop a column in one migration while old code is still running.
+- **Never add `NOT NULL` without a default** — it locks large tables and takes production down.
+- **pgvector embedding columns in BOTH the migration and the ORM** — use `pgvector.sqlalchemy.Vector(1536)` in the ORM so `Base.metadata.create_all` builds it for tests.
+- **Don't bundle Phase 1 gap fixes into Phase 2 migrations without an explicit comment** explaining what you're fixing and why.
+
+### Deployment and release
+- **Semver + git tags** on every release. No "main-only" implicit versions.
+- **CHANGELOG.md** updated under `[Unreleased]` as PRs merge; moved to versioned sections on release.
+- **Feature flags for gradual rollout.** Every new user-visible feature ships behind a flag that can be flipped off without a redeploy.
+- **Rollback plan documented per deploy.** "How do we undo this?" is answered before the deploy, not during.
+- **Environment parity** — dev / staging / prod run the same container images; only the injected config differs.
+
+### Process discipline
+- **GitHub Issues for every bug, tech-debt item, and follow-up.** Not in commit messages, not in CLAUDE.md prose. In issues, with labels.
+- **Conventional Commits** (`feat(scope): ...`, `fix(scope): ...`). Commit messages explain the *why*, not the *what*.
+- **Issue and PR templates** in `.github/` — minimal bug template + minimal PR template.
+- **Session notes** in `docs/session-notes/YYYY-MM-DD.md` at the end of substantive work sessions, so the next session can resume in 2 minutes instead of 30.
+
+---
+
 ## Development Environment
 
 **The Sonar dev stack runs entirely inside Docker containers.** You do NOT need Python, `uv`, postgres, or pgvector installed on the host. The `api` container has everything.
@@ -162,15 +238,19 @@ docker compose exec -T postgres psql -U sonar -d sonar -c "\d signals"
 
 ## Known Pre-existing Bugs (not blocking Foundation, but tracked)
 
-These are tracked in GitHub issues (to be opened — see the session's remediation plan). Do NOT include fixes for these in Phase 2 Foundation implementation; they belong in their own focused PRs.
+All of these now have GitHub issues. Do NOT include fixes for these in Phase 2 Foundation implementation; each belongs in its own focused PR.
 
-1. **`passlib` + `bcrypt>=4.1` incompatibility** — `passlib` references `bcrypt.__about__` which was removed in bcrypt 4.1. Three tests fail as a result. Fix: pin `bcrypt<4.1` or swap `passlib` for `argon2-cffi` / `bcrypt` directly. Security-sensitive so belongs in its own PR.
+1. **`passlib` + `bcrypt>=4.1` incompatibility** — Issue [#5](https://github.com/nischal94/sonar/issues/5). `passlib` references `bcrypt.__about__` which was removed in bcrypt 4.1. Three tests fail as a result. Fix: pin `bcrypt<4.1` or swap `passlib` for `bcrypt` / `argon2-cffi` directly. Security-sensitive so belongs in its own PR.
 
-2. **`test_router_calls_slack_for_configured_workspace`** — asserts Slack sender's `.send()` was called once, but the router doesn't call it. Either the router logic was never finished or the test is outdated. Needs investigation.
+2. **`test_router_calls_slack_for_configured_workspace`** — Issue [#6](https://github.com/nischal94/sonar/issues/6). Asserts Slack sender's `.send()` was called once, but the router doesn't call it. Either the router logic was never finished or the test is outdated / the mock is patched at the wrong import path. Needs investigation.
 
-3. **pytest-asyncio strict-mode fixture issue on `main`** — `@pytest.fixture` decorators on `async def` fixtures are silently ignored under pytest-asyncio 1.x strict mode, causing tests that depend on `test_engine`/`db_session` to error out at collection time. Already fixed on `feat/phase-2-foundation-impl` (commit `b29afa5`); will propagate to main when Foundation merges.
+3. **`auth.py` hardening — defense-in-depth** — Issue [#7](https://github.com/nischal94/sonar/issues/7). Add `options={"require": ["exp", "sub"]}` to `jwt.decode()` so missing-claim failures become explicit PyJWT errors rather than relying on the `KeyError` catch. Not blocking, worth a follow-up.
 
-4. **`auth.py` hardening — optional defense-in-depth** — PR #4 reviewer suggested adding `options={"require": ["exp", "sub"]}` to `jwt.decode()` so missing-claim failures become explicit PyJWT errors rather than relying on the `KeyError` catch. Not blocking, worth a follow-up.
+4. **`Connection` model missing FK constraints** — Issue [#8](https://github.com/nischal94/sonar/issues/8). `workspace_id` and `user_id` columns on `Connection` are declared without `ForeignKey(...)` — the DB-level FK exists but the ORM doesn't know about it. Same pattern as `Post.connection_id` which was fixed during Task 1 fixup.
+
+5. **conftest `event_loop` vs `test_engine` scoping trap** — Issue [#9](https://github.com/nischal94/sonar/issues/9). `conftest.py` keeps a session-scoped `event_loop` fixture while `test_engine` is now function-scoped. Tests pass today because pytest-asyncio 1.x tolerantly ignores the override and emits a DeprecationWarning. Will break when pytest-asyncio 2.x removes the shim. Should be addressed before Task 14 final verification.
+
+6. **pytest-asyncio strict-mode fixture issue** — already fixed on `feat/phase-2-foundation-impl` (commit `b29afa5`); will propagate to main when Foundation merges. The fix is what unblocked Tasks 2-5 and Phase 1 tests running at all.
 
 ---
 
