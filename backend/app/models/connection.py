@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Float, Boolean, Integer, ARRAY, Text, UniqueConstraint
+from sqlalchemy import Column, String, Float, Boolean, Integer, ARRAY, Text, UniqueConstraint, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from app.models._types import TIMESTAMPTZ
 import uuid
@@ -9,8 +9,8 @@ class Connection(Base):
     __table_args__ = (UniqueConstraint("workspace_id", "linkedin_id"),)
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    workspace_id = Column(UUID(as_uuid=True), nullable=False)
-    user_id = Column(UUID(as_uuid=True), nullable=False)
+    workspace_id = Column(UUID(as_uuid=True), ForeignKey("workspaces.id"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     linkedin_id = Column(String, nullable=False)
     name = Column(String, nullable=False)
     headline = Column(Text)
