@@ -63,11 +63,11 @@ No design spec exists for any of these. When Phase 2 ships, run a brainstorming 
 
 **Why:** 3 backend major bumps were closed-with-defer during the Dependabot first-run burst. Each is independently evaluatable now via the existing test suite. Rule from `feedback_dep_audit_split.md`: backend majors get branch + test + merge, one at a time, not batched. **Now unblocked by Priority 1 shipping** — every bump PR auto-runs `ruff + mypy + pytest + coverage + CodeQL` via `ci.yml`, so each merge is materially safer than when this priority was first drafted. Dependabot will re-open #29/#34/#35 on its next Monday run if still outstanding.
 
-**Packages and per-library smoke tests:**
+**Packages and per-library smoke tests (in order):**
 
-- **`redis 5.0.0 → 7.4.0`** — redis-py went through 5 → 6 → 7 with breaking API changes. Smoke test: enqueue a Celery job, verify it processes through `worker` container. Verify connection-pool behavior under concurrent load.
-- **`numpy 1.26.0 → 2.4.4`** — numpy 2.0 has breaking changes in scalar behavior, dtype promotion, removed aliases. Smoke test: `pytest tests/test_scorer.py tests/test_matcher.py tests/test_ring2_matcher.py -v` and manually exercise the scorer with a sample alert.
-- **`pgvector 0.3.0 → 0.4.2`** — 0.x minor, semver allows breaking changes. Smoke test: run migrations top-to-bottom, run Ring 2 cosine similarity query against seeded data, verify embedding column type is unchanged.
+- **`numpy 1.26.0 → 2.4.4`** — NEXT UP. numpy 2.0 has breaking changes in scalar behavior, dtype promotion, removed aliases. Smoke test: `pytest tests/test_scorer.py tests/test_matcher.py tests/test_ring2_matcher.py -v` and manually exercise the scorer with a sample alert.
+- **`pgvector 0.3.0 → 0.4.2`** — after numpy. 0.x minor, semver allows breaking changes. Smoke test: run migrations top-to-bottom, run Ring 2 cosine similarity query against seeded data, verify embedding column type is unchanged.
+- **`redis 5.0.0 → 7.4.0`** — ❌ BLOCKED UPSTREAM on celery+kombu. Attempted 2026-04-13 on branch `chore/deps-redis-7`; uv resolver failed because every `celery[redis]` release (5.4.0–5.6.3) transitively requires `kombu[redis]`, and every `kombu[redis]` release caps `redis<=5.2.1`. Cannot land until celery ships a release with kombu supporting redis>=7. Tracked in [#43](https://github.com/nischal94/sonar/issues/43). Auto-close future Dependabot redis-7 PRs with a link to #43.
 
 **Process per package** (per `feedback_dep_audit_split.md`):
 1. `git checkout -b chore/deps-<package>`
@@ -78,7 +78,7 @@ No design spec exists for any of these. When Phase 2 ships, run a brainstorming 
 6. Commit with `chore(deps): bump <package> from X to Y` (Conventional Commits — release-drafter will auto-label)
 7. Push, open PR, run `superpowers:code-reviewer`, merge if green, update CHANGELOG
 
-**Effort:** ~1 hour total for all 3, sequentially.
+**Effort:** ~30-40 min total for numpy + pgvector (redis excluded — blocked).
 
 ---
 
