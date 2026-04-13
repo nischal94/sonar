@@ -2,6 +2,18 @@
 
 All notable changes to Sonar are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
+## [0.2.3](https://github.com/nischal94/sonar/compare/v0.2.2...v0.2.3) (2026-04-13)
+
+
+### Documentation
+
+* **todo:** end-of-session-2 sync — Priority 2 complete, v0.2.2 shipped ([00db5ed](https://github.com/nischal94/sonar/commit/00db5ed1a66af8e447aa2f8545382877676f5f40))
+
+
+### CI/CD
+
+* bump all workflow actions to Node-24-compatible majors ([#50](https://github.com/nischal94/sonar/issues/50)) ([4d54da0](https://github.com/nischal94/sonar/commit/4d54da059fc28acd527bc6573d4d5f418cc90730))
+
 ## [0.2.2](https://github.com/nischal94/sonar/compare/v0.2.1...v0.2.2) (2026-04-13)
 
 
