@@ -1,8 +1,8 @@
 # Sonar — TODO
 
-## Resume Here (last updated 2026-04-12)
+## Resume Here (last updated 2026-04-13)
 
-**Current state:** clean. `main` HEAD = `ab91c1f`. 54/54 tests passing. 0 open PRs. 1 open issue (#40 — dependency audit, deferred). Phase 1 + Phase 2 Foundation shipped. All Phase 1 cleanup + Phase 2 follow-up issues closed (#5, #6, #7, #8, #11, #14, #17, #18, #21, #22, #25). Committer leak (Gmail + hostname) fully remediated via `git filter-branch` + force-push — `main` now shows 40 noreply + 17 GitHub squash-merge committers, zero leaks. `.github/` scaffold (release-drafter, Dependabot, PR/issue templates) live.
+**Current state:** clean. `main` HEAD = `d4f7837`. 54/54 tests passing. 1 open PR (#42 — release-please auto-PR for `v0.2.1`, mergeable). 0 open issues — #40 was closed 2026-04-11 as "tracked in TODO.md," NOT resolved; the 8 deferred dep bumps remain live under Priorities 2 and 3 below. Phase 1 + Phase 2 Foundation shipped. Committer leak fully remediated (as before). `.github/` scaffold + CI gates now live — `ci.yml` (ruff + mypy + pytest + coverage), `codeql.yml`, `pr-title.yml`, `release-please.yml`, `pre-commit-config.yaml` all shipped in `d4f7837`. Releases: `v0.2.0` tagged 2026-04-11; `v0.2.1` queued in PR #42.
 
 **Where to read for full context before resuming:**
 - `sonar/CLAUDE.md` — engineering rules + the new "Lessons Learned — Rules Codified from Prior Sessions" section near the bottom (Python DI, asyncio.gather, frontend deps need human in browser)
@@ -43,11 +43,11 @@ No design spec exists for any of these. When Phase 2 ships, run a brainstorming 
 
 ## Next steps in priority order
 
-### Priority 1 — Wire up CI gates (top tech-debt)
+### Priority 1 — Wire up CI gates (top tech-debt) — ✅ Shipped 2026-04-13 in `d4f7837`
 
-**Why:** Top tech-debt item per `sonar/CLAUDE.md` "Engineering Standards" → "CI and code quality". Without CI, every PR needs manual test runs, dep bumps can't be auto-merged safely, and regressions sneak in. The `.github/` scaffold is already in place — we just need a `ci.yml` workflow. **Should land before any Phase 2 slice work** so new code is auto-validated.
+**Status:** Done. The `.github/workflows/` directory now contains `ci.yml`, `codeql.yml`, `pr-title.yml`, and `release-please.yml`, plus `.pre-commit-config.yaml` at the repo root. `release-please` replaced `release-drafter` (see commit `96b2338`). Below is preserved as the "what shipped" reference — audit against the actual workflow files if verifying coverage.
 
-**What to add in `.github/workflows/ci.yml`:**
+**What was planned (per original Priority 1 spec):**
 - `ruff check` (lint + format check) on every PR
 - `mypy` or `pyright` (start permissive, tighten over time per `sonar/CLAUDE.md` Engineering Standards)
 - `pytest -q` with coverage reporting (target 70-85% meaningful coverage)
@@ -55,15 +55,13 @@ No design spec exists for any of these. When Phase 2 ships, run a brainstorming 
 - Frontend `npm run build` sanity check
 - Pre-commit hook check (block secrets, trailing whitespace, large files, lint violations)
 
-**How to start:** read `.github/workflows/release-drafter.yml` for the workflow style, then plan via `superpowers:writing-plans` before executing. Plan should cover: which Python version matrix, how to spin up Postgres + pgvector for tests, whether to use the existing `api` container or a fresh runner image.
-
-**Effort:** half a session. **Blocks:** Priority 4+ ideally should land after this.
+**Follow-up if gaps found:** diff `ci.yml` against the checklist above; any missing item gets a standalone PR rather than a re-open of this priority.
 
 ---
 
-### Priority 2 — Issue #40 backend dep bumps (3 packages, individually)
+### Priority 2 — Issue #40 backend dep bumps (3 packages, individually) — NEXT UP
 
-**Why:** 3 backend major bumps were closed-with-defer during the Dependabot first-run burst. Each is independently evaluatable now via the existing test suite. Rule from `feedback_dep_audit_split.md`: backend majors get branch + test + merge, one at a time, not batched.
+**Why:** 3 backend major bumps were closed-with-defer during the Dependabot first-run burst. Each is independently evaluatable now via the existing test suite. Rule from `feedback_dep_audit_split.md`: backend majors get branch + test + merge, one at a time, not batched. **Now unblocked by Priority 1 shipping** — every bump PR auto-runs `ruff + mypy + pytest + coverage + CodeQL` via `ci.yml`, so each merge is materially safer than when this priority was first drafted. Dependabot will re-open #29/#34/#35 on its next Monday run if still outstanding.
 
 **Packages and per-library smoke tests:**
 
@@ -193,8 +191,7 @@ After these are on, GitHub will reject any future push with a non-noreply email 
 ## Orthogonal cleanup (not blocking, do when convenient)
 
 - **CHANGELOG release** — when you cut a `v0.1.0` release, move the `[Unreleased]` block to a versioned section. release-drafter is already configured to auto-draft the release notes; you just need to review the draft at https://github.com/nischal94/sonar/releases and click Publish.
-- **Pre-commit hooks** — `sonar/CLAUDE.md` Engineering Standards lists pre-commit hooks (block secrets, trailing whitespace, large files, lint violations) as part of the CI tooling goal. Bundle with Priority 1.
-- **Type checking** — same. mypy/pyright in CI starts permissive, tightens over time.
+- **Type checking** — mypy/pyright in CI starts permissive, tightens over time. (Basic setup shipped with Priority 1 — tighten-over-time work remains.)
 - **Eval datasets for LLM features** — `sonar/CLAUDE.md` Engineering Standards "LLM and agent discipline" requires golden datasets + CI gates for prompt-dependent features. Required for Ring 2 semantic matching, context generator, and the future signal proposal wizard.
 - **Observability** — structured logging via `structlog`, error tracking (Sentry), Prometheus metrics, health check splits (liveness vs readiness), DB backups with restore drill. Per `sonar/CLAUDE.md` "Observability — required before launch."
 - **Rate limiting** — `/auth/token` and any credential-checking endpoint per `sonar/CLAUDE.md` Security. Required before launch.
@@ -221,18 +218,19 @@ Per-project memory at `~/.claude/projects/-Users-nischal-Downloads-Misc-projects
 
 ---
 
-## Verified state on `main` as of 2026-04-12
+## Verified state on `main` as of 2026-04-13
 
 | | |
 |---|---|
-| HEAD SHA | `ab91c1f` |
+| HEAD SHA | `d4f7837` |
 | Tests | 54/54 passing |
-| Open PRs | 0 |
-| Open issues | 1 (#40 — dependency audit, deferred) |
-| Committer audit | 40 commits = `10312650+nischal94@users.noreply.github.com` (clean noreply, author + committer) + 17 = `noreply@github.com` (GitHub squash-merge), zero leaked emails |
-| Branch protection | restored — `allow_force_pushes: false`, `allow_deletions: false`, all other restrictions disabled |
-| Active branches on origin | `main` only (all merged PR branches deleted) |
-| Draft release | `v0.1.0` at https://github.com/nischal94/sonar/releases (auto-drafted by release-drafter from PR labels) |
+| Open PRs | 1 (#42 — release-please auto-PR for `v0.2.1`, mergeable, non-draft) |
+| Open issues | 0 (#40 closed 2026-04-11 as tracked-in-TODO; 8 dep bumps still live under Priorities 2/3) |
+| CI | `ci.yml` (ruff + mypy + pytest + coverage), `codeql.yml`, `pr-title.yml`, `release-please.yml` all active; `.pre-commit-config.yaml` at repo root |
+| Committer audit | clean — noreply + GitHub squash-merge only, zero leaked emails |
+| Branch protection | `allow_force_pushes: false`, `allow_deletions: false` |
+| Active branches on origin | `main` + `release-please--branches--main--components--sonar` (auto-maintained by release-please) |
+| Releases | `v0.2.0` tagged 2026-04-11; `v0.2.1` queued in PR #42 (release-please now drives this, replacing release-drafter in commit `96b2338`) |
 | Global git config (this Mac) | `user.email = 10312650+nischal94@users.noreply.github.com`, `user.name = Nischal` |
 
 **Sonar repo is at a clean stopping point.** Pick up any Priority above and go.
