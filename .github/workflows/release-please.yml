@@ -83,6 +83,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.release.outputs.tag_name }}
           REPO: ${{ github.repository }}
+        # IMPORTANT: the FOOTER terminator below must sit at the SAME column
+        # as the heredoc body lines. YAML's block-scalar strip auto-detects
+        # the indent from the first content line (`current=...`) and strips
+        # that many spaces from EVERY line — so if `current=...` is at
+        # column 10, the FOOTER terminator must also be at column 10 so it
+        # lands at column 0 where bash recognizes it. Any re-indent of ONE
+        # line without matching the others will hang the next release.
+        # Verified with `bash -n` post-YAML-parse in 2026-04-13 session.
         run: |
           current=$(gh release view "$TAG" --json body -q .body)
           footer=$(cat <<FOOTER
