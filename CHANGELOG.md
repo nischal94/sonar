@@ -2,6 +2,29 @@
 
 All notable changes to Sonar are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
+## [0.2.1](https://github.com/nischal94/sonar/compare/v0.2.0...v0.2.1) (2026-04-13)
+
+
+### 🐛 Fixed
+
+* **ci:** unblock alembic + frontend CI on GitHub Actions ([#45](https://github.com/nischal94/sonar/issues/45)) ([086d757](https://github.com/nischal94/sonar/commit/086d7578b307b8eddd8f3ecfc3eb9afdb375b576))
+
+
+### 📚 Documentation
+
+* **todo:** mark redis 7 bump blocked upstream; reorder numpy/pgvector ([c522c00](https://github.com/nischal94/sonar/commit/c522c009b3853940358244620f6cd6bcaafac693))
+* **todo:** sync state to 2026-04-13 ([a9b5e4b](https://github.com/nischal94/sonar/commit/a9b5e4b0f76ed4f64f81506d62347fe379ad9aee))
+
+
+### 🔧 CI/CD
+
+* add CI workflow, CodeQL, PR title lint, CODEOWNERS, pre-commit config ([d4f7837](https://github.com/nischal94/sonar/commit/d4f7837d9735a4e3a70f1658220dec3f50213a7f))
+
+
+### 🔧 Chores
+
+* **deps:** pin numpy to 2.x major (already running 2.4.4) ([#44](https://github.com/nischal94/sonar/issues/44)) ([2401fd6](https://github.com/nischal94/sonar/commit/2401fd6b7410c9da0051d4d747095fb97e9d98b7))
+
 ## [0.2.0](https://github.com/nischal94/sonar/compare/v0.1.0...v0.2.0) (2026-04-11)
 
 
