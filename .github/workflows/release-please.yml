@@ -30,7 +30,49 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
-      - uses: googleapis/release-please-action@v4
+      - id: release
+        uses: googleapis/release-please-action@v4
         with:
           config-file: .github/release-please-config.json
           manifest-file: .github/.release-please-manifest.json
+
+      # The steps below run ONLY when release-please actually creates a
+      # release (i.e., on the push that merges the Release PR). They attach
+      # supply-chain transparency artifacts to the GitHub Release:
+      #   - sonar-extension-<tag>.zip  — loadable Chrome MV3 bundle
+      #   - sonar-sbom-<tag>.spdx.json — SPDX SBOM of the repo
+      # Gated on steps.release.outputs.release_created so ordinary pushes
+      # to main (which only update the Release PR, not cut a release)
+      # don't burn CI minutes on asset packaging.
+
+      - if: ${{ steps.release.outputs.release_created }}
+        name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.tag_name }}
+
+      - if: ${{ steps.release.outputs.release_created }}
+        name: Package Chrome extension
+        run: |
+          cd extension
+          zip -r "../sonar-extension-${{ steps.release.outputs.tag_name }}.zip" . -x "*.DS_Store" "*.map"
+
+      - if: ${{ steps.release.outputs.release_created }}
+        name: Generate SBOM (SPDX via syft)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: sonar-sbom-${{ steps.release.outputs.tag_name }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - if: ${{ steps.release.outputs.release_created }}
+        name: Upload assets to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ steps.release.outputs.tag_name }}" \
+            "sonar-extension-${{ steps.release.outputs.tag_name }}.zip" \
+            "sonar-sbom-${{ steps.release.outputs.tag_name }}.spdx.json" \
+            --clobber
