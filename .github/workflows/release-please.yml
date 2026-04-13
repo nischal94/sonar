@@ -76,3 +76,24 @@ jobs:
             "sonar-extension-${{ steps.release.outputs.tag_name }}.zip" \
             "sonar-sbom-${{ steps.release.outputs.tag_name }}.spdx.json" \
             --clobber
+
+      - if: ${{ steps.release.outputs.release_created }}
+        name: Append supply-chain transparency footer to release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+          REPO: ${{ github.repository }}
+        run: |
+          current=$(gh release view "$TAG" --json body -q .body)
+          footer=$(cat <<FOOTER
+
+          ---
+
+          ### Supply-chain transparency
+          - Code ownership: [CODEOWNERS](https://github.com/${REPO}/blob/main/.github/CODEOWNERS)
+          - Security policy: [SECURITY.md](https://github.com/${REPO}/blob/main/SECURITY.md)
+          - SBOM: \`sonar-sbom-${TAG}.spdx.json\` (attached to this release)
+          - Chrome extension bundle: \`sonar-extension-${TAG}.zip\` (attached to this release)
+          FOOTER
+          )
+          gh release edit "$TAG" --notes "${current}${footer}"
