@@ -2,14 +2,15 @@
 
 ## Resume Here (last updated 2026-04-13, session 2)
 
-**Current state:** clean. `main` HEAD = `747f5e2`. 54/54 tests passing. **0 open PRs. 1 open issue (#43 — redis 7 bump blocked upstream on celery+kombu).** Phase 1 + Phase 2 Foundation shipped. Committer leak fully remediated (as before). `.github/` scaffold + CI gates live — `ci.yml`, `codeql.yml`, `pr-title.yml`, `release-please.yml`, `pre-commit-config.yaml`. Releases: `v0.2.0` (2026-04-11), `v0.2.1` (2026-04-13), `v0.2.2` (2026-04-13, latest) — `v0.2.2` is the first release with the new supply-chain pipeline: SBOM (SPDX ~375KB) + Chrome extension .zip attached as assets + "Supply-chain transparency" footer in release notes.
+**Current state:** clean. `main` HEAD = `520dccb`. 54/54 tests passing. **0 open PRs. 1 open issue (#43 — redis 7 bump blocked upstream on celery+kombu).** Phase 1 + Phase 2 Foundation shipped. Committer leak fully remediated (as before). `.github/` scaffold + CI gates live — `ci.yml`, `codeql.yml`, `pr-title.yml`, `release-please.yml`, `pre-commit-config.yaml`. Releases: `v0.2.0` (2026-04-11), `v0.2.1`, `v0.2.2`, `v0.2.3` (all 2026-04-13, `v0.2.3` latest) — starting with `v0.2.2`, every release attaches SBOM (SPDX ~375KB) + Chrome extension .zip as assets and appends a "Supply-chain transparency" footer to release notes.
 
-**This session (2026-04-13, session 2) shipped 6 PRs across 2 releases:**
+**This session (2026-04-13, session 2) shipped 8 PRs across 3 releases:**
 - #44 numpy 2.x pin (codify reality)
 - #45 CI fixes (alembic DATABASE_URL env override + frontend vite-env.d.ts) — surfaced when #44 triggered CI for the first time after `d4f7837`
 - #46 release-please enhancements (emoji-strip, SBOM + extension zip assets, CODEOWNERS/SECURITY.md footer)
 - #48 pgvector 0.4.x pin (codify reality)
-- #42 and #47 — release-please automated release PRs for `v0.2.1` and `v0.2.2`
+- #50 Node-24-compatible action bumps across all workflows (checkout v4→v6, setup-node v4→v6, setup-uv v3→v8.0.0, semantic-pr v5→v6, setup-buildx v3→v4, build-push v5→v7); `anchore/sbom-action@v0` and `github/codeql-action/*` deliberately kept on current pins
+- #42, #47, #49 — release-please automated release PRs for `v0.2.1`, `v0.2.2`, `v0.2.3`
 
 **Priority 2 is now fully resolved** — redis blocked (#43), numpy + pgvector pinned and released. The frontend-deps bucket under Priority 3 is the only backlog item from the original #40 deferral.
 
@@ -227,21 +228,21 @@ Per-project memory at `~/.claude/projects/-Users-nischal-Downloads-Misc-projects
 
 | | |
 |---|---|
-| HEAD SHA | `747f5e2` (`chore(main): release 0.2.2 (#47)`) |
+| HEAD SHA | `520dccb` (`chore(main): release 0.2.3 (#49)`) |
 | Tests | 54/54 passing |
 | Open PRs | 0 |
 | Open issues | 1 ([#43](https://github.com/nischal94/sonar/issues/43) — redis 7 bump blocked upstream on celery+kombu) |
-| CI | `ci.yml` (ruff + mypy + pytest + coverage), `codeql.yml`, `pr-title.yml`, `release-please.yml` all active; `.pre-commit-config.yaml` at repo root. Verified green end-to-end on PRs #44–#48 this session. |
-| Release pipeline | release-please auto-maintains "next release" PR; on merge it cuts tag + Release + attaches `sonar-extension-<tag>.zip` + `sonar-sbom-<tag>.spdx.json` (SPDX via syft) + appends Supply-chain transparency footer. Verified end-to-end on `v0.2.2`. |
+| CI | `ci.yml` (ruff + mypy + pytest + coverage), `codeql.yml`, `pr-title.yml`, `release-please.yml` all active; `.pre-commit-config.yaml` at repo root. Verified green end-to-end on PRs #44–#50 this session. All non-excluded workflow actions on Node-24-compatible majors. |
+| Release pipeline | release-please auto-maintains "next release" PR; on merge it cuts tag + Release + attaches `sonar-extension-<tag>.zip` + `sonar-sbom-<tag>.spdx.json` (SPDX via syft) + appends Supply-chain transparency footer. Verified end-to-end on `v0.2.2` and `v0.2.3`. |
 | Committer audit | clean — noreply + GitHub squash-merge only, zero leaked emails |
 | Branch protection | `allow_force_pushes: false`, `allow_deletions: false` |
-| Active branches on origin | `main` only (release-please branch auto-deleted after #47 merged; recreates on next commit to main) |
-| Releases | `v0.2.0` (2026-04-11), `v0.2.1` (2026-04-13), `v0.2.2` (2026-04-13, latest — first release with SBOM + extension zip + footer) |
+| Active branches on origin | `main` only (release-please branch auto-deleted after #49 merged; recreates on next commit to main) |
+| Releases | `v0.2.0` (2026-04-11), `v0.2.1`, `v0.2.2`, `v0.2.3` (all 2026-04-13; `v0.2.3` latest). `v0.2.2` was the first release with SBOM + extension zip + footer. |
 | Global git config (this Mac) | `user.email = 10312650+nischal94@users.noreply.github.com`, `user.name = Nischal` |
 
 ### Known follow-up tracked for a future session
 
-- **Node 20 action deprecation** (surfaced in v0.2.2 release-please workflow annotation). `actions/checkout@v4` and `googleapis/release-please-action@v4` run on Node 20, which GitHub is deprecating: forced to Node 24 starting 2026-06-02, removed entirely 2026-09-16. Bump to newer major versions (or verify the current majors ship Node 24 support) before the deadline. Not urgent.
+- **Residual Node 20 on `googleapis/release-please-action@v4`.** PR #50 bumped all other workflow actions to Node-24-compatible majors, but `release-please-action@v4` is already on the latest major and its current v4.x patches still use Node 20. The v0.2.3 release-please run still fires the deprecation annotation specifically for this one action. Deadline: Node 24 forced 2026-06-02, Node 20 removed 2026-09-16. Will resolve when googleapis ships either a v4 patch with Node 24 or a v5. Revisit in May 2026 if still outstanding.
 
 **Sonar repo is at a clean stopping point.** Pick up any Priority above and go.
 
