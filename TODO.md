@@ -1,8 +1,17 @@
 # Sonar — TODO
 
-## Resume Here (last updated 2026-04-13)
+## Resume Here (last updated 2026-04-13, session 2)
 
-**Current state:** clean. `main` HEAD = `d4f7837`. 54/54 tests passing. 1 open PR (#42 — release-please auto-PR for `v0.2.1`, mergeable). 0 open issues — #40 was closed 2026-04-11 as "tracked in TODO.md," NOT resolved; the 8 deferred dep bumps remain live under Priorities 2 and 3 below. Phase 1 + Phase 2 Foundation shipped. Committer leak fully remediated (as before). `.github/` scaffold + CI gates now live — `ci.yml` (ruff + mypy + pytest + coverage), `codeql.yml`, `pr-title.yml`, `release-please.yml`, `pre-commit-config.yaml` all shipped in `d4f7837`. Releases: `v0.2.0` tagged 2026-04-11; `v0.2.1` queued in PR #42.
+**Current state:** clean. `main` HEAD = `747f5e2`. 54/54 tests passing. **0 open PRs. 1 open issue (#43 — redis 7 bump blocked upstream on celery+kombu).** Phase 1 + Phase 2 Foundation shipped. Committer leak fully remediated (as before). `.github/` scaffold + CI gates live — `ci.yml`, `codeql.yml`, `pr-title.yml`, `release-please.yml`, `pre-commit-config.yaml`. Releases: `v0.2.0` (2026-04-11), `v0.2.1` (2026-04-13), `v0.2.2` (2026-04-13, latest) — `v0.2.2` is the first release with the new supply-chain pipeline: SBOM (SPDX ~375KB) + Chrome extension .zip attached as assets + "Supply-chain transparency" footer in release notes.
+
+**This session (2026-04-13, session 2) shipped 6 PRs across 2 releases:**
+- #44 numpy 2.x pin (codify reality)
+- #45 CI fixes (alembic DATABASE_URL env override + frontend vite-env.d.ts) — surfaced when #44 triggered CI for the first time after `d4f7837`
+- #46 release-please enhancements (emoji-strip, SBOM + extension zip assets, CODEOWNERS/SECURITY.md footer)
+- #48 pgvector 0.4.x pin (codify reality)
+- #42 and #47 — release-please automated release PRs for `v0.2.1` and `v0.2.2`
+
+**Priority 2 is now fully resolved** — redis blocked (#43), numpy + pgvector pinned and released. The frontend-deps bucket under Priority 3 is the only backlog item from the original #40 deferral.
 
 **Where to read for full context before resuming:**
 - `sonar/CLAUDE.md` — engineering rules + the new "Lessons Learned — Rules Codified from Prior Sessions" section near the bottom (Python DI, asyncio.gather, frontend deps need human in browser)
@@ -59,26 +68,22 @@ No design spec exists for any of these. When Phase 2 ships, run a brainstorming 
 
 ---
 
-### Priority 2 — Issue #40 backend dep bumps (3 packages, individually) — NEXT UP
+### Priority 2 — Issue #40 backend dep bumps — ✅ Complete 2026-04-13
 
-**Why:** 3 backend major bumps were closed-with-defer during the Dependabot first-run burst. Each is independently evaluatable now via the existing test suite. Rule from `feedback_dep_audit_split.md`: backend majors get branch + test + merge, one at a time, not batched. **Now unblocked by Priority 1 shipping** — every bump PR auto-runs `ruff + mypy + pytest + coverage + CodeQL` via `ci.yml`, so each merge is materially safer than when this priority was first drafted. Dependabot will re-open #29/#34/#35 on its next Monday run if still outstanding.
+**Status:** All 3 packages dispositioned. Priority is closed out.
 
-**Packages and per-library smoke tests (in order):**
+- **`numpy 1.26.0 → 2.4.4`** — ✅ Pinned via [PR #44](https://github.com/nischal94/sonar/pull/44). Investigation showed uv.lock already had 2.4.4 resolved; change was a defensive `>=2.0.0,<3` ceiling in pyproject, not a real version bump. Included in `v0.2.2`.
+- **`pgvector 0.3.0 → 0.4.2`** — ✅ Pinned via [PR #48](https://github.com/nischal94/sonar/pull/48). Same pattern as numpy — lock was already at 0.4.2; pinned to `>=0.4.0,<0.5` (SemVer-strict for 0.x minor). Included in `v0.2.2`.
+- **`redis 5.0.0 → 7.4.0`** — ❌ Blocked upstream, tracked in [#43](https://github.com/nischal94/sonar/issues/43). Every `celery[redis]` release (5.4.0–5.6.3) transitively requires `kombu[redis]`, which caps `redis<=5.2.1`. Cannot land until celery ships a release with kombu supporting redis>=7. Auto-close future Dependabot redis-7 PRs with a link to #43.
 
-- **`numpy 1.26.0 → 2.4.4`** — NEXT UP. numpy 2.0 has breaking changes in scalar behavior, dtype promotion, removed aliases. Smoke test: `pytest tests/test_scorer.py tests/test_matcher.py tests/test_ring2_matcher.py -v` and manually exercise the scorer with a sample alert.
-- **`pgvector 0.3.0 → 0.4.2`** — after numpy. 0.x minor, semver allows breaking changes. Smoke test: run migrations top-to-bottom, run Ring 2 cosine similarity query against seeded data, verify embedding column type is unchanged.
-- **`redis 5.0.0 → 7.4.0`** — ❌ BLOCKED UPSTREAM on celery+kombu. Attempted 2026-04-13 on branch `chore/deps-redis-7`; uv resolver failed because every `celery[redis]` release (5.4.0–5.6.3) transitively requires `kombu[redis]`, and every `kombu[redis]` release caps `redis<=5.2.1`. Cannot land until celery ships a release with kombu supporting redis>=7. Tracked in [#43](https://github.com/nischal94/sonar/issues/43). Auto-close future Dependabot redis-7 PRs with a link to #43.
-
-**Process per package** (per `feedback_dep_audit_split.md`):
+**Process record** (preserved for future dep-audit sessions, per `feedback_dep_audit_split.md`):
 1. `git checkout -b chore/deps-<package>`
-2. Bump the version in `backend/pyproject.toml`
-3. `docker compose exec -T api uv sync --all-extras` (regenerates `uv.lock`)
-4. `docker compose exec -T api pytest -q` — must remain 54/54
-5. Run the library-specific smoke test above
-6. Commit with `chore(deps): bump <package> from X to Y` (Conventional Commits — release-drafter will auto-label)
-7. Push, open PR, run `superpowers:code-reviewer`, merge if green, update CHANGELOG
-
-**Effort:** ~30-40 min total for numpy + pgvector (redis excluded — blocked).
+2. Verify `uv.lock` for the ACTUAL current version — don't trust the pyproject floor alone (both numpy and pgvector were already at target)
+3. Bump the pin in `backend/pyproject.toml`; run `uv sync --all-extras`
+4. Commit pyproject + uv.lock as TWO atomic commits per `sonar/CLAUDE.md:481`
+5. `pytest -q` must stay 54/54
+6. Push, open PR, dispatch `superpowers:code-reviewer`
+7. Pause for explicit user merge approval per `sonar/CLAUDE.md`
 
 ---
 
@@ -218,20 +223,25 @@ Per-project memory at `~/.claude/projects/-Users-nischal-Downloads-Misc-projects
 
 ---
 
-## Verified state on `main` as of 2026-04-13
+## Verified state on `main` as of 2026-04-13 (end of session 2)
 
 | | |
 |---|---|
-| HEAD SHA | `d4f7837` |
+| HEAD SHA | `747f5e2` (`chore(main): release 0.2.2 (#47)`) |
 | Tests | 54/54 passing |
-| Open PRs | 1 (#42 — release-please auto-PR for `v0.2.1`, mergeable, non-draft) |
-| Open issues | 0 (#40 closed 2026-04-11 as tracked-in-TODO; 8 dep bumps still live under Priorities 2/3) |
-| CI | `ci.yml` (ruff + mypy + pytest + coverage), `codeql.yml`, `pr-title.yml`, `release-please.yml` all active; `.pre-commit-config.yaml` at repo root |
+| Open PRs | 0 |
+| Open issues | 1 ([#43](https://github.com/nischal94/sonar/issues/43) — redis 7 bump blocked upstream on celery+kombu) |
+| CI | `ci.yml` (ruff + mypy + pytest + coverage), `codeql.yml`, `pr-title.yml`, `release-please.yml` all active; `.pre-commit-config.yaml` at repo root. Verified green end-to-end on PRs #44–#48 this session. |
+| Release pipeline | release-please auto-maintains "next release" PR; on merge it cuts tag + Release + attaches `sonar-extension-<tag>.zip` + `sonar-sbom-<tag>.spdx.json` (SPDX via syft) + appends Supply-chain transparency footer. Verified end-to-end on `v0.2.2`. |
 | Committer audit | clean — noreply + GitHub squash-merge only, zero leaked emails |
 | Branch protection | `allow_force_pushes: false`, `allow_deletions: false` |
-| Active branches on origin | `main` + `release-please--branches--main--components--sonar` (auto-maintained by release-please) |
-| Releases | `v0.2.0` tagged 2026-04-11; `v0.2.1` queued in PR #42 (release-please now drives this, replacing release-drafter in commit `96b2338`) |
+| Active branches on origin | `main` only (release-please branch auto-deleted after #47 merged; recreates on next commit to main) |
+| Releases | `v0.2.0` (2026-04-11), `v0.2.1` (2026-04-13), `v0.2.2` (2026-04-13, latest — first release with SBOM + extension zip + footer) |
 | Global git config (this Mac) | `user.email = 10312650+nischal94@users.noreply.github.com`, `user.name = Nischal` |
+
+### Known follow-up tracked for a future session
+
+- **Node 20 action deprecation** (surfaced in v0.2.2 release-please workflow annotation). `actions/checkout@v4` and `googleapis/release-please-action@v4` run on Node 20, which GitHub is deprecating: forced to Node 24 starting 2026-06-02, removed entirely 2026-09-16. Bump to newer major versions (or verify the current majors ship Node 24 support) before the deadline. Not urgent.
 
 **Sonar repo is at a clean stopping point.** Pick up any Priority above and go.
 
