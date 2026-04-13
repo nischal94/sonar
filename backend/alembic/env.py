@@ -22,6 +22,7 @@ if config.config_file_name is not None:
 # environments don't need to match docker-compose's `postgres` service name.
 # Alembic uses psycopg2 (sync); strip `+asyncpg` so the one env var can serve
 # both the async app and sync migrations.
+# NOTE: do not log _env_db_url — it contains the database password.
 _env_db_url = os.environ.get("DATABASE_URL")
 if _env_db_url:
     config.set_main_option(
