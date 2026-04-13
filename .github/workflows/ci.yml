@@ -65,9 +65,9 @@ jobs:
       APIFY_API_TOKEN: placeholder-apify-token
       EXTENSION_VERSION: 1.0.0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - name: Install uv + Python 3.12
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@v8
         with:
           python-version: "3.12"
       - name: Install dependencies
@@ -91,8 +91,8 @@ jobs:
     name: Backend — ruff (advisory)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v3
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v8
         with:
           python-version: "3.12"
       - name: Ruff check (advisory — does not block PRs until baseline is clean)
@@ -111,8 +111,8 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
         with:
           node-version: "20"
           cache: npm
@@ -126,10 +126,10 @@ jobs:
     name: Docker — backend image build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@v6
+      - uses: docker/setup-buildx-action@v4
       - name: Build backend image (sanity check — no push)
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v7
         with:
           context: backend
           push: false
