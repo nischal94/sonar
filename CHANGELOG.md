@@ -2,6 +2,14 @@
 
 All notable changes to Sonar are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
+## [0.2.2](https://github.com/nischal94/sonar/compare/v0.2.1...v0.2.2) (2026-04-13)
+
+
+### Chores
+
+* **deps:** pin pgvector to 0.4.x (already running 0.4.2) ([#48](https://github.com/nischal94/sonar/issues/48)) ([3cddee0](https://github.com/nischal94/sonar/commit/3cddee0d4c8eee6ba719a439aa63ee9655577ecf))
+* **release:** strip emojis, attach SBOM/extension zip, add trust footer ([#46](https://github.com/nischal94/sonar/issues/46)) ([0863b80](https://github.com/nischal94/sonar/commit/0863b80336986e4ee49007a9ec71033a3f8e515e))
+
 ## [0.2.1](https://github.com/nischal94/sonar/compare/v0.2.0...v0.2.1) (2026-04-13)
 
 
