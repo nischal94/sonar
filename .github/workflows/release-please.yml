@@ -30,7 +30,78 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
-      - uses: googleapis/release-please-action@v4
+      - id: release
+        uses: googleapis/release-please-action@v4
         with:
           config-file: .github/release-please-config.json
           manifest-file: .github/.release-please-manifest.json
+
+      # The steps below run ONLY when release-please actually creates a
+      # release (i.e., on the push that merges the Release PR). They attach
+      # supply-chain transparency artifacts to the GitHub Release:
+      #   - sonar-extension-<tag>.zip  — loadable Chrome MV3 bundle
+      #   - sonar-sbom-<tag>.spdx.json — SPDX SBOM of the repo
+      # Gated on steps.release.outputs.release_created so ordinary pushes
+      # to main (which only update the Release PR, not cut a release)
+      # don't burn CI minutes on asset packaging.
+
+      - if: ${{ steps.release.outputs.release_created }}
+        name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.tag_name }}
+
+      - if: ${{ steps.release.outputs.release_created }}
+        name: Package Chrome extension
+        run: |
+          cd extension
+          zip -r "../sonar-extension-${{ steps.release.outputs.tag_name }}.zip" . -x "*.DS_Store" "*.map"
+
+      - if: ${{ steps.release.outputs.release_created }}
+        name: Generate SBOM (SPDX via syft)
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: sonar-sbom-${{ steps.release.outputs.tag_name }}.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - if: ${{ steps.release.outputs.release_created }}
+        name: Upload assets to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${{ steps.release.outputs.tag_name }}" \
+            "sonar-extension-${{ steps.release.outputs.tag_name }}.zip" \
+            "sonar-sbom-${{ steps.release.outputs.tag_name }}.spdx.json" \
+            --clobber
+
+      - if: ${{ steps.release.outputs.release_created }}
+        name: Append supply-chain transparency footer to release notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.release.outputs.tag_name }}
+          REPO: ${{ github.repository }}
+        # IMPORTANT: the FOOTER terminator below must sit at the SAME column
+        # as the heredoc body lines. YAML's block-scalar strip auto-detects
+        # the indent from the first content line (`current=...`) and strips
+        # that many spaces from EVERY line — so if `current=...` is at
+        # column 10, the FOOTER terminator must also be at column 10 so it
+        # lands at column 0 where bash recognizes it. Any re-indent of ONE
+        # line without matching the others will hang the next release.
+        # Verified with `bash -n` post-YAML-parse in 2026-04-13 session.
+        run: |
+          current=$(gh release view "$TAG" --json body -q .body)
+          footer=$(cat <<FOOTER
+
+          ---
+
+          ### Supply-chain transparency
+          - Code ownership: [CODEOWNERS](https://github.com/${REPO}/blob/main/.github/CODEOWNERS)
+          - Security policy: [SECURITY.md](https://github.com/${REPO}/blob/main/SECURITY.md)
+          - SBOM: \`sonar-sbom-${TAG}.spdx.json\` (attached to this release)
+          - Chrome extension bundle: \`sonar-extension-${TAG}.zip\` (attached to this release)
+          FOOTER
+          )
+          gh release edit "$TAG" --notes "${current}${footer}"

@@ -12,16 +12,16 @@
       "bump-minor-pre-major": true,
       "bump-patch-for-minor-pre-major": false,
       "changelog-sections": [
-        { "type": "feat", "section": "🚀 Added", "hidden": false },
-        { "type": "fix", "section": "🐛 Fixed", "hidden": false },
-        { "type": "perf", "section": "⚡ Performance", "hidden": false },
-        { "type": "refactor", "section": "🧹 Changed", "hidden": false },
-        { "type": "docs", "section": "📚 Documentation", "hidden": false },
-        { "type": "test", "section": "🧪 Tests", "hidden": false },
-        { "type": "build", "section": "📦 Build", "hidden": false },
-        { "type": "ci", "section": "🔧 CI/CD", "hidden": false },
-        { "type": "chore", "section": "🔧 Chores", "hidden": false },
-        { "type": "revert", "section": "⏪ Reverts", "hidden": false }
+        { "type": "feat", "section": "Added", "hidden": false },
+        { "type": "fix", "section": "Fixed", "hidden": false },
+        { "type": "perf", "section": "Performance", "hidden": false },
+        { "type": "refactor", "section": "Changed", "hidden": false },
+        { "type": "docs", "section": "Documentation", "hidden": false },
+        { "type": "test", "section": "Tests", "hidden": false },
+        { "type": "build", "section": "Build", "hidden": false },
+        { "type": "ci", "section": "CI/CD", "hidden": false },
+        { "type": "chore", "section": "Chores", "hidden": false },
+        { "type": "revert", "section": "Reverts", "hidden": false }
       ]
     }
   }
