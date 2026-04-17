@@ -1,16 +1,24 @@
 # Sonar — TODO
 
-## Resume Here (last updated 2026-04-17, session 3)
+## Resume Here (last updated 2026-04-18, session 4)
 
-**Current state:** clean. `main` HEAD = `3c559af` (session-3 TODO sync on top of `65c49be` release). 54/54 tests passing, all CI green for release merge (v0.2.4 SBOM + extension.zip attached, verified). **0 open PRs. 1 open issue (#43 — redis 7 bump blocked upstream on celery+kombu).** Latest release: `v0.2.4` (2026-04-17). Project folder moved from `~/Downloads/Misc/projects/project-ideas/sonar` → `~/Downloads/Misc/projects/sonar` (old path no longer exists).
+**Current state:** clean. `main` HEAD = `ce0f958` (Wizard frontend merge). **81 backend tests pass + 3 skipped + 6 frontend vitest tests pass**, all CI green including E2E Playwright. **1 open PR (#71 release-please `v0.4.0`, auto-drafted — merge to cut release). 4 open issues: #43 (blocked upstream), #62 (uvicorn proxy-headers before prod), #65 (Playwright register/login specs re-activation), #69 (Wizard /confirm P3 polish nits).** Latest release: `v0.3.0` (2026-04-17). `v0.4.0` about to cut on #71 merge.
 
-**⚠️ Pre-launch gaps (required before production):**
-- **Rate limiting** — ✅ `/auth/token` shipped via PR #61 (2026-04-17). 5/min per IP, custom 429 handler that doesn't leak the policy string, deploy precondition (uvicorn `--proxy-headers` + `--forwarded-allow-ips`) documented and tracked in #62. `/workspace/register` rate-limit + email-enumeration fix deferred to #63. Priority 8 GitHub email-privacy toggles also done.
+**This session (2026-04-17 → 2026-04-18, session 4) shipped the full Phase 2 Wizard slice end-to-end + testing ladder + misc infra. PRs merged:**
+
+- **#64** feat(infra+wizard): Wizard Task 1 (project-wide LLM tier bump `gpt-4o-mini` → `gpt-5.4-mini` via `OPENAI_MODEL_EXPENSIVE` constant) + testing ladder per Cherny's "give Claude a feedback loop" pattern (Stop hook at `.claude/hooks/verify.sh`, `/verify` slash command, Vitest harness + @testing-library/react, Playwright E2E harness + `e2e.yml` CI workflow)
+- **#67** feat(auth): rate limit `/workspace/register` to 3/min per IP (closes #63 Piece 1)
+- **#68** feat(wizard): backend — Tasks 2–9 (migration 004 `signal_proposal_events`, SignalProposalEvent ORM, `app/prompts/propose_signals.py` prompt module with `PROMPT_VERSION="v1"`, Pydantic schemas in `app/schemas/wizard.py`, `POST /workspace/signals/propose` endpoint, `POST /workspace/signals/confirm` endpoint with idempotency guard + role-separation at LLM API boundary, E2E integration test, structural CI gate against real OpenAI)
+- **#70** feat(wizard): frontend — Tasks 10–12 (`SignalConfig.tsx` 5-step wizard, `/signals/setup` route + Onboarding redirect, `CLAUDE.md` LLM routing + `app/prompts/` convention update)
+- **#66** chore(deps): bump esbuild + vitest in /frontend (Dependabot, transitive from PR #64's Vitest install)
+
+**Pre-launch gaps (required before production):**
+- **Rate limiting** — ✅ Both `/auth/token` (5/min, PR #61) and `/workspace/register` (3/min, PR #67) shipped. Deploy precondition (uvicorn `--proxy-headers` + `--forwarded-allow-ips`) documented in `app/rate_limit.py` and tracked in #62.
 - **PII / GDPR** — data retention policy + export + deletion endpoints. Not implemented.
-- **Observability baseline** — structured logging (`structlog` w/ request-ID), error tracking (Sentry or equivalent), Prometheus metrics, split `/health/live` vs `/health/ready`, DB backups + tested restore drill. Not implemented.
-- **LLM eval datasets** — golden datasets + CI gate for Ring 2 semantic matching, context generator, future signal-proposal wizard. Per `sonar/CLAUDE.md` "LLM and agent discipline." Not implemented.
+- **Observability baseline** — structured logging (`structlog` w/ request-ID), error tracking (Sentry), Prometheus metrics, split `/health/live` vs `/health/ready`, DB backups + tested restore drill. Not implemented.
+- **LLM eval datasets** — harness exists in spirit via the structural CI gate (`test_propose_signals_shape.py`), but the "golden dataset seeded from production telemetry" pattern won't activate until `signal_proposal_events` has ~100+ real completions (design: `docs/phase-2/wizard-decisions.md §3a`). Not blocking until real users exist.
 
-Remaining launch-blockers (PII/GDPR, observability, LLM evals) should be promoted into the numbered Priority list before Phase 2 Wizard/Dashboard/Backfill/Discovery expand the LLM surface area and make the gaps bigger.
+Remaining launch-blockers (PII/GDPR, observability) should be promoted into the numbered Priority list before Phase 2 Dashboard/Backfill/Discovery expand the LLM + data surface area.
 
 **This session (2026-04-17, session 3) shipped 9 PRs in one Dependabot-burst triage + release:**
 
@@ -47,17 +55,17 @@ Release (1):
 
 Ingest pipeline, capability profile extraction, signal matching, scoring, alerts, delivery channels (Slack / email / Telegram / WhatsApp), Chrome extension, React dashboard, JWT auth. All 4 known Phase 1 bugs closed; the 5 originally-failing tests are all green; 54/54 on `main`.
 
-### Phase 2 — 1 of 5 slices shipped, 4 remaining
+### Phase 2 — 2 of 5 slices shipped, 3 remaining
 
 | Slice | Status | What it is |
 |---|---|---|
 | **Foundation** | ✅ Shipped (PR #10) | Migration 002, 4 new ORM models, Ring 1/2 matchers, pipeline refactor, scorer keyword bonus, one-shot backfill script, 24 new tests |
-| **Wizard** | ⬜ Not started | Signal Configuration Wizard — backend API + frontend UI for users to configure their buying-intent signals. Plan should exist at `docs/phase-2/implementation-wizard.md`. |
-| **Dashboard** | ⬜ Not started | Network Intelligence Dashboard — heatmap of buying intent across the user's network + incremental aggregation pipeline. Depends on Wizard (configurable signals first). |
-| **Backfill** | ⬜ Not started | Day-One Backfill — Chrome extension + Apify integration to seed the system with historical posts on first install. Depends on Phase 1 extension working + signals to match against. |
+| **Wizard** | ✅ Shipped session 4 (PRs #64 + #68 + #70) | Signal Configuration Wizard — backend API (`POST /workspace/signals/propose` + `/confirm`, `signal_proposal_events` telemetry, `app/prompts/propose_signals.py` v1, idempotency + role-separation defense) + frontend 5-step `SignalConfig.tsx` at `/signals/setup` + Onboarding redirect. Plan at `docs/phase-2/implementation-wizard.md`, decisions at `docs/phase-2/wizard-decisions.md`. |
+| **Dashboard** | ⬜ Not started | Network Intelligence Dashboard — heatmap of buying intent across the user's network + incremental aggregation pipeline. Depends on Wizard (configurable signals first) — now unblocked. Design reference: `docs/phase-2/design.md §4.3`. No implementation plan yet. |
+| **Backfill** | ⬜ Not started | Day-One Backfill — Chrome extension + Apify integration to seed the system with historical posts on first install. Depends on Phase 1 extension working + signals to match against (Wizard). |
 | **Discovery** | ⬜ Not started | Ring 3 nightly HDBSCAN clustering for emerging topics + Weekly Digest Email. Most experimental — best built last when there's real data. |
 
-**Recommended order:** Wizard → Dashboard → Backfill → Discovery (matches dependency direction).
+**Recommended order:** Dashboard → Backfill → Discovery (matches dependency direction). Next action: `superpowers:brainstorming` on `docs/phase-2/design.md §4.3` to produce `docs/phase-2/implementation-dashboard.md`.
 
 ### Phase 3 — ⬜ TBD (no design yet)
 
@@ -135,18 +143,11 @@ No design spec exists for any of these. When Phase 2 ships, run a brainstorming 
 
 ---
 
-### Priority 4 — Phase 2 Wizard slice
+### Priority 4 — Phase 2 Wizard slice ✅ DONE session 4 (2026-04-17 → 2026-04-18)
 
-**Why:** Foundation is shipped (PR #10). Wizard is the next dependency-direction step — it builds the configuration UI/API on top of the data model Foundation laid. Dashboard, Backfill, and Discovery all assume configurable signals exist (Wizard's deliverable).
+Shipped across PRs #64 (foundation + testing ladder + LLM tier bump), #68 (backend — migration, ORM, prompt module, schemas, propose/confirm endpoints, integration test, structural CI gate), #70 (frontend — `SignalConfig.tsx` + `/signals/setup` route + `Onboarding` redirect + `CLAUDE.md` update). 12-task plan at `docs/phase-2/implementation-wizard.md` fully delivered. Decisions locked in `docs/phase-2/wizard-decisions.md`.
 
-**How to start:**
-1. Verify the plan exists: `cat docs/phase-2/implementation-wizard.md`
-2. If yes, dispatch the implementer through `superpowers:subagent-driven-development` — same per-task subagent flow that worked for Foundation
-3. If no, run `superpowers:brainstorming` first to design it, then `superpowers:writing-plans` to plan it, then implement
-
-**Pre-req:** CI gates from Priority 1 should ideally be in place first so the new code is auto-validated as it lands.
-
-**Effort:** multi-session. Foundation took ~14 tasks; Wizard is likely similar.
+**Follow-up P3 nits:** see #69.
 
 ---
 
@@ -242,22 +243,27 @@ Per-project memory at `~/.claude/projects/-Users-nischal-Downloads-Misc-projects
 
 ---
 
-## Verified state on `main` as of 2026-04-17 (end of session 3)
+## Verified state on `main` as of 2026-04-18 (end of session 4)
 
 | | |
 |---|---|
-| HEAD SHA | `71a868e` (`feat(auth): rate limit /auth/token to 5/min per IP (#61)`) |
-| Tests | 55/55 passing — 54 pre-existing + 1 new `test_login_endpoint_rate_limited_to_5_per_minute` |
-| Open PRs | 0 (release-please will auto-open v0.2.5 PR shortly) |
-| Open issues | 3 ([#43](https://github.com/nischal94/sonar/issues/43) redis 7 blocked upstream, [#62](https://github.com/nischal94/sonar/issues/62) uvicorn proxy-headers deploy precondition, [#63](https://github.com/nischal94/sonar/issues/63) register rate-limit + email-enumeration fix) |
-| CI | `ci.yml` (ruff + mypy + pytest + coverage), `codeql.yml`, `pr-title.yml`, `release-please.yml` all active; `.pre-commit-config.yaml` at repo root. PR #61 passed all 8 checks including two reviewer-fix pushes. |
-| Release pipeline | release-please auto-maintains "next release" PR; on merge it cuts tag + Release + attaches `sonar-extension-<tag>.zip` + `sonar-sbom-<tag>.spdx.json` + supply-chain footer. `v0.2.4` shipped 2026-04-17 10:52Z with assets verified. Next release will be `v0.2.5`. |
+| HEAD SHA | `ce0f958` (`feat(wizard): frontend — Tasks 10-12 of Phase 2 Wizard plan (#70)`) |
+| Backend tests | **81 passing + 3 skipped** (skipped are `test_propose_signals_shape.py` — runs against real OpenAI when `OPENAI_API_KEY` isn't placeholder) |
+| Frontend tests | **6 passing** (3 `Settings.test.tsx`, 3 `SignalConfig.test.tsx`) via Vitest + @testing-library/react |
+| E2E tests | Playwright harness at `e2e/` — 2 `.fixme` register/login specs (issue #65), 2 `.fixme` wizard-golden-path placeholders. Runs in `e2e.yml` CI workflow. |
+| Open PRs | 1 ([#71](https://github.com/nischal94/sonar/pull/71) release-please `v0.4.0` auto-draft) |
+| Open issues | 4 ([#43](https://github.com/nischal94/sonar/issues/43) redis 7 blocked upstream, [#62](https://github.com/nischal94/sonar/issues/62) uvicorn proxy-headers deploy precondition, [#65](https://github.com/nischal94/sonar/issues/65) Playwright register/login re-activate, [#69](https://github.com/nischal94/sonar/issues/69) Wizard /confirm P3 nits) |
+| CI | `ci.yml` (ruff + mypy + pytest + coverage), `codeql.yml`, `pr-title.yml`, `release-please.yml`, `e2e.yml` (Playwright chromium) all active; `.pre-commit-config.yaml` at repo root. Pre-commit `pre-commit install` active locally via `python3 -m pip install --user pre-commit` (hook wired at `.git/hooks/pre-commit`). |
+| Stop hook | `.claude/hooks/verify.sh` runs pytest + tsc + vitest on every turn-end with relevant changes; exits 2 on failure to block Claude from stopping on broken state. `/verify` slash command at `.claude/commands/verify.md` for the full ladder. |
+| Release pipeline | release-please auto-maintains "next release" PR; on merge it cuts tag + Release + attaches `sonar-extension-<tag>.zip` + `sonar-sbom-<tag>.spdx.json` + supply-chain footer. Verified end-to-end through `v0.3.0`. `v0.4.0` about to cut on #71 merge. |
 | Committer audit | clean — noreply + GitHub squash-merge only, zero leaked emails |
 | Branch protection | `allow_force_pushes: false`, `allow_deletions: false` |
-| Active branches on origin | `main` only |
-| Releases | `v0.2.0` (2026-04-11), `v0.2.1`, `v0.2.2`, `v0.2.3` (all 2026-04-13), **`v0.2.4`** (2026-04-17, latest). |
+| Active branches on origin | `main` + `release-please--branches--main--components--sonar` (auto-managed bot) |
+| Releases | `v0.2.0–v0.2.4` (April 11–17), **`v0.3.0`** (2026-04-17, session-3 dep triage + foundation), **`v0.4.0`** (pending #71 merge — will ship Wizard backend + frontend + register rate-limit + testing ladder). |
 | Global git config (this Mac) | `user.email = 10312650+nischal94@users.noreply.github.com`, `user.name = Nischal` |
-| Project location | `~/Downloads/Misc/projects/sonar` (moved 2026-04-17 from `~/Downloads/Misc/projects/project-ideas/sonar`) |
+| Project location | `~/Downloads/Misc/projects/sonar` |
+| LLM tier | `OPENAI_MODEL_EXPENSIVE = "gpt-5.4-mini"` (`app/config.py`) — single routing layer. Bumped from `gpt-4o-mini` in PR #64. |
+| Prompts | `app/prompts/propose_signals.py` (v1) — first entry under the new convention. Pattern: `PROMPT_VERSION`, static `SYSTEM_PROMPT`, `build_user_message()`, `RESPONSE_JSON_SCHEMA`. |
 
 ### Known follow-up tracked for a future session
 
