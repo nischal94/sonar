@@ -2,7 +2,15 @@
 
 ## Resume Here (last updated 2026-04-17, session 3)
 
-**Current state:** clean. `main` HEAD = `65c49be`. 54/54 tests passing (expected; CI for release merge still running at write time). **0 open PRs. 1 open issue (#43 — redis 7 bump blocked upstream on celery+kombu).** Latest release: `v0.2.4` (2026-04-17). Project folder moved from `~/Downloads/Misc/projects/project-ideas/sonar` → `~/Downloads/Misc/projects/sonar` (old path no longer exists).
+**Current state:** clean. `main` HEAD = `3c559af` (session-3 TODO sync on top of `65c49be` release). 54/54 tests passing, all CI green for release merge (v0.2.4 SBOM + extension.zip attached, verified). **0 open PRs. 1 open issue (#43 — redis 7 bump blocked upstream on celery+kombu).** Latest release: `v0.2.4` (2026-04-17). Project folder moved from `~/Downloads/Misc/projects/project-ideas/sonar` → `~/Downloads/Misc/projects/sonar` (old path no longer exists).
+
+**⚠️ Pre-launch gaps (required before production, NOT yet in numbered priority list — currently under "Orthogonal cleanup" at bottom):**
+- **Rate limiting** on `/auth/token` + any credential-checking endpoint — per `sonar/CLAUDE.md` Security. Not implemented.
+- **PII / GDPR** — data retention policy + export + deletion endpoints. Not implemented.
+- **Observability baseline** — structured logging (`structlog` w/ request-ID), error tracking (Sentry or equivalent), Prometheus metrics, split `/health/live` vs `/health/ready`, DB backups + tested restore drill. Not implemented.
+- **LLM eval datasets** — golden datasets + CI gate for Ring 2 semantic matching, context generator, future signal-proposal wizard. Per `sonar/CLAUDE.md` "LLM and agent discipline." Not implemented.
+
+These should probably be promoted into the numbered Priority list before Phase 2 Wizard/Dashboard/Backfill/Discovery expand the LLM surface area and make the gaps bigger. Decision-maker: you — do it in one future-session pass.
 
 **This session (2026-04-17, session 3) shipped 9 PRs in one Dependabot-burst triage + release:**
 
