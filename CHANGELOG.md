@@ -2,6 +2,13 @@
 
 All notable changes to Sonar are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
+## [0.4.0](https://github.com/nischal94/sonar/compare/v0.3.0...v0.4.0) (2026-04-17)
+
+
+### Added
+
+* **wizard:** frontend — Tasks 10-12 of Phase 2 Wizard plan ([#70](https://github.com/nischal94/sonar/issues/70)) ([ce0f958](https://github.com/nischal94/sonar/commit/ce0f9582692781c8e2ce6513c4697825d468a706))
+
 ## [0.3.0](https://github.com/nischal94/sonar/compare/v0.2.4...v0.3.0) (2026-04-17)
 
 
