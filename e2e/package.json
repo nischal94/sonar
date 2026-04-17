@@ -1,0 +1,16 @@
+{
+  "name": "sonar-e2e",
+  "private": true,
+  "version": "0.0.0",
+  "description": "End-to-end tests for Sonar. Spans backend + frontend + (eventually) Chrome extension. Runs Playwright against a stack brought up via docker-compose + npm run dev.",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:headed": "playwright test --headed",
+    "install-browsers": "playwright install chromium --with-deps",
+    "list": "playwright test --list"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}

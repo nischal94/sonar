@@ -25,3 +25,9 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
+
+
+# Project-wide LLM routing constants. Keep in lockstep with sonar/CLAUDE.md
+# "LLM and agent discipline" routing rules. Single source of truth — every
+# caller imports from here, no hardcoding model names at call sites.
+OPENAI_MODEL_EXPENSIVE = "gpt-5.4-mini"
