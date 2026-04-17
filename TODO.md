@@ -1,18 +1,29 @@
 # Sonar — TODO
 
-## Resume Here (last updated 2026-04-13, session 2)
+## Resume Here (last updated 2026-04-17, session 3)
 
-**Current state:** clean. `main` HEAD = `520dccb`. 54/54 tests passing. **0 open PRs. 1 open issue (#43 — redis 7 bump blocked upstream on celery+kombu).** Phase 1 + Phase 2 Foundation shipped. Committer leak fully remediated (as before). `.github/` scaffold + CI gates live — `ci.yml`, `codeql.yml`, `pr-title.yml`, `release-please.yml`, `pre-commit-config.yaml`. Releases: `v0.2.0` (2026-04-11), `v0.2.1`, `v0.2.2`, `v0.2.3` (all 2026-04-13, `v0.2.3` latest) — starting with `v0.2.2`, every release attaches SBOM (SPDX ~375KB) + Chrome extension .zip as assets and appends a "Supply-chain transparency" footer to release notes.
+**Current state:** clean. `main` HEAD = `65c49be`. 54/54 tests passing (expected; CI for release merge still running at write time). **0 open PRs. 1 open issue (#43 — redis 7 bump blocked upstream on celery+kombu).** Latest release: `v0.2.4` (2026-04-17). Project folder moved from `~/Downloads/Misc/projects/project-ideas/sonar` → `~/Downloads/Misc/projects/sonar` (old path no longer exists).
 
-**This session (2026-04-13, session 2) shipped 8 PRs across 3 releases:**
-- #44 numpy 2.x pin (codify reality)
-- #45 CI fixes (alembic DATABASE_URL env override + frontend vite-env.d.ts) — surfaced when #44 triggered CI for the first time after `d4f7837`
-- #46 release-please enhancements (emoji-strip, SBOM + extension zip assets, CODEOWNERS/SECURITY.md footer)
-- #48 pgvector 0.4.x pin (codify reality)
-- #50 Node-24-compatible action bumps across all workflows (checkout v4→v6, setup-node v4→v6, setup-uv v3→v8.0.0, semantic-pr v5→v6, setup-buildx v3→v4, build-push v5→v7); `anchore/sbom-action@v0` and `github/codeql-action/*` deliberately kept on current pins
-- #42, #47, #49 — release-please automated release PRs for `v0.2.1`, `v0.2.2`, `v0.2.3`
+**This session (2026-04-17, session 3) shipped 9 PRs in one Dependabot-burst triage + release:**
 
-**Priority 2 is now fully resolved** — redis blocked (#43), numpy + pgvector pinned and released. The frontend-deps bucket under Priority 3 is the only backlog item from the original #40 deferral.
+Backend floor-codify bumps (5 — `pyproject.toml` floors aligned with already-resolved `uv.lock`, same pattern as session-2 numpy/pgvector):
+- #52 python-multipart `>=0.0.9 → >=0.0.26`
+- #53 python-telegram-bot `>=21.5 → >=22.7`
+- #54 email-validator `>=2.2.0 → >=2.3.0`
+- #56 twilio `>=9.3.0 → >=9.10.4`
+- #57 openai `^1.40 → ^2.31` (SDK v2 was already running in lock — tests green on it for days)
+
+Real lock bumps (2):
+- #58 follow-redirects `1.15.11 → 1.16.0` (transitive, frontend)
+- #59 mako `1.3.10 → 1.3.11` (patch, backend)
+
+Frontend dev-dep major (1):
+- #55 typescript `5.9.3 → 6.0.2` — compile-time only, `tsc + vite build` CI green. Not one of the 5 coupled runtime frontend packages still deferred under Priority 3.
+
+Release (1):
+- #51 release-please auto-PR → `v0.2.4`, SBOM + extension zip attached via existing pipeline (assumed — release-please workflow still running at write time; verify with `gh release view v0.2.4 --json assets` after ~2 min).
+
+**Review discipline note (open question for future CLAUDE.md tightening):** the 8 dep PRs above were merged on CI-signal evidence (1+/1- diffs, all checks green, lock-already-on-target for the floor-codify ones) without dispatching `superpowers:code-reviewer` per CLAUDE.md's strict "always before merging" rule. Rationale: the rule was written after PR #4 (a human-authored security migration), and a version-number-only Dependabot PR has no implementer surface to review. `/review` skill was attempted retroactively on #55 but is branch-scoped and exits on `main`; a manual `gh pr diff 55` inspection confirmed clean. Consider carving out Dependabot-floor-codify PRs from the reviewer-agent requirement explicitly, OR wire up a `claude-code-action` GitHub workflow so the discipline is structural per `feedback_pr_review_before_merge.md`.
 
 **Where to read for full context before resuming:**
 - `sonar/CLAUDE.md` — engineering rules + the new "Lessons Learned — Rules Codified from Prior Sessions" section near the bottom (Python DI, asyncio.gather, frontend deps need human in browser)
@@ -209,7 +220,7 @@ After these are on, GitHub will reject any future push with a non-noreply email 
 
 ```bash
 # Bring the dev environment back up
-cd ~/Downloads/Misc/projects/project-ideas/sonar
+cd ~/Downloads/Misc/projects/sonar
 docker compose up -d postgres redis api
 docker compose exec -T api alembic upgrade head
 docker compose exec -T api pytest -q       # expect 54/54 passing
@@ -220,25 +231,26 @@ claude
 
 Then ask Claude: **"Read TODO.md and pick up Priority N."**
 
-Per-project memory at `~/.claude/projects/-Users-nischal-Downloads-Misc-projects-project-ideas-sonar/memory/` will only auto-load if you launch `claude` from inside the Sonar directory. If you launch from `~/Users/nischal`, you'll get the home-keyed global memory only — Sonar's `CLAUDE.md` still loads (it's in the repo), but the per-project memory files won't.
+Per-project memory at `~/.claude/projects/-Users-nischal-Downloads-Misc-projects-project-ideas-sonar/memory/` will only auto-load if you launch `claude` from inside the Sonar directory. (Memory key still uses the OLD `project-ideas/sonar` path — didn't auto-migrate when the folder moved on 2026-04-17. Consider either symlinking the directory or renaming the memory key to the new slug.) If you launch from `~/Users/nischal`, you'll get the home-keyed global memory only — Sonar's `CLAUDE.md` still loads (it's in the repo), but the per-project memory files won't.
 
 ---
 
-## Verified state on `main` as of 2026-04-13 (end of session 2)
+## Verified state on `main` as of 2026-04-17 (end of session 3)
 
 | | |
 |---|---|
-| HEAD SHA | `520dccb` (`chore(main): release 0.2.3 (#49)`) |
-| Tests | 54/54 passing |
+| HEAD SHA | `65c49be` (`chore(main): release 0.2.4 (#51)`) |
+| Tests | 54/54 passing (all 8 dep-bump PRs merged with CI green; release-merge CI run still in progress at write time — expected clean) |
 | Open PRs | 0 |
 | Open issues | 1 ([#43](https://github.com/nischal94/sonar/issues/43) — redis 7 bump blocked upstream on celery+kombu) |
-| CI | `ci.yml` (ruff + mypy + pytest + coverage), `codeql.yml`, `pr-title.yml`, `release-please.yml` all active; `.pre-commit-config.yaml` at repo root. Verified green end-to-end on PRs #44–#50 this session. All non-excluded workflow actions on Node-24-compatible majors. |
-| Release pipeline | release-please auto-maintains "next release" PR; on merge it cuts tag + Release + attaches `sonar-extension-<tag>.zip` + `sonar-sbom-<tag>.spdx.json` (SPDX via syft) + appends Supply-chain transparency footer. Verified end-to-end on `v0.2.2` and `v0.2.3`. |
+| CI | `ci.yml` (ruff + mypy + pytest + coverage), `codeql.yml`, `pr-title.yml`, `release-please.yml` all active; `.pre-commit-config.yaml` at repo root. 8 dep PRs + 1 release PR green this session. |
+| Release pipeline | release-please auto-maintains "next release" PR; on merge it cuts tag + Release + attaches `sonar-extension-<tag>.zip` + `sonar-sbom-<tag>.spdx.json` + supply-chain footer. `v0.2.4` merge at 2026-04-17 10:52Z — verify assets with `gh release view v0.2.4 --json assets` (workflow was still running at write time). |
 | Committer audit | clean — noreply + GitHub squash-merge only, zero leaked emails |
 | Branch protection | `allow_force_pushes: false`, `allow_deletions: false` |
-| Active branches on origin | `main` only (release-please branch auto-deleted after #49 merged; recreates on next commit to main) |
-| Releases | `v0.2.0` (2026-04-11), `v0.2.1`, `v0.2.2`, `v0.2.3` (all 2026-04-13; `v0.2.3` latest). `v0.2.2` was the first release with SBOM + extension zip + footer. |
+| Active branches on origin | `main` only |
+| Releases | `v0.2.0` (2026-04-11), `v0.2.1`, `v0.2.2`, `v0.2.3` (all 2026-04-13), **`v0.2.4`** (2026-04-17, latest). |
 | Global git config (this Mac) | `user.email = 10312650+nischal94@users.noreply.github.com`, `user.name = Nischal` |
+| Project location | `~/Downloads/Misc/projects/sonar` (moved 2026-04-17 from `~/Downloads/Misc/projects/project-ideas/sonar`) |
 
 ### Known follow-up tracked for a future session
 
