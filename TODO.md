@@ -4,13 +4,13 @@
 
 **Current state:** clean. `main` HEAD = `3c559af` (session-3 TODO sync on top of `65c49be` release). 54/54 tests passing, all CI green for release merge (v0.2.4 SBOM + extension.zip attached, verified). **0 open PRs. 1 open issue (#43 — redis 7 bump blocked upstream on celery+kombu).** Latest release: `v0.2.4` (2026-04-17). Project folder moved from `~/Downloads/Misc/projects/project-ideas/sonar` → `~/Downloads/Misc/projects/sonar` (old path no longer exists).
 
-**⚠️ Pre-launch gaps (required before production, NOT yet in numbered priority list — currently under "Orthogonal cleanup" at bottom):**
-- **Rate limiting** on `/auth/token` + any credential-checking endpoint — per `sonar/CLAUDE.md` Security. Not implemented.
+**⚠️ Pre-launch gaps (required before production):**
+- **Rate limiting** — ✅ `/auth/token` shipped via PR #61 (2026-04-17). 5/min per IP, custom 429 handler that doesn't leak the policy string, deploy precondition (uvicorn `--proxy-headers` + `--forwarded-allow-ips`) documented and tracked in #62. `/workspace/register` rate-limit + email-enumeration fix deferred to #63. Priority 8 GitHub email-privacy toggles also done.
 - **PII / GDPR** — data retention policy + export + deletion endpoints. Not implemented.
 - **Observability baseline** — structured logging (`structlog` w/ request-ID), error tracking (Sentry or equivalent), Prometheus metrics, split `/health/live` vs `/health/ready`, DB backups + tested restore drill. Not implemented.
 - **LLM eval datasets** — golden datasets + CI gate for Ring 2 semantic matching, context generator, future signal-proposal wizard. Per `sonar/CLAUDE.md` "LLM and agent discipline." Not implemented.
 
-These should probably be promoted into the numbered Priority list before Phase 2 Wizard/Dashboard/Backfill/Discovery expand the LLM surface area and make the gaps bigger. Decision-maker: you — do it in one future-session pass.
+Remaining launch-blockers (PII/GDPR, observability, LLM evals) should be promoted into the numbered Priority list before Phase 2 Wizard/Dashboard/Backfill/Discovery expand the LLM surface area and make the gaps bigger.
 
 **This session (2026-04-17, session 3) shipped 9 PRs in one Dependabot-burst triage + release:**
 
@@ -180,14 +180,13 @@ No design spec exists for any of these. When Phase 2 ships, run a brainstorming 
 
 ---
 
-### Priority 8 — GitHub-side email privacy hardening (one-time, requires browser, 30 seconds)
+### Priority 8 — GitHub-side email privacy hardening ✅ DONE 2026-04-17 session 3
 
-I can't flip these via API. Do them the next time you open GitHub:
+Both toggles flipped by user:
+1. ✅ **github.com → Settings → Emails → "Keep my email addresses private"**
+2. ✅ **github.com → Settings → Emails → "Block command line pushes that expose my email"**
 
-1. **github.com → Settings → Emails → "Keep my email addresses private"** ☐
-2. **github.com → Settings → Emails → "Block command line pushes that expose my email"** ☐
-
-After these are on, GitHub will reject any future push with a non-noreply email at the protocol level — belt-and-suspenders on top of the global `git config user.email` set this session. Without these, a future session that loses or overrides the global git config could re-introduce the leak before any session-start check fires.
+GitHub now rejects any future push with a non-noreply email at the protocol level — belt-and-suspenders on top of the global `git config user.email`.
 
 ---
 
@@ -247,12 +246,12 @@ Per-project memory at `~/.claude/projects/-Users-nischal-Downloads-Misc-projects
 
 | | |
 |---|---|
-| HEAD SHA | `65c49be` (`chore(main): release 0.2.4 (#51)`) |
-| Tests | 54/54 passing (all 8 dep-bump PRs merged with CI green; release-merge CI run still in progress at write time — expected clean) |
-| Open PRs | 0 |
-| Open issues | 1 ([#43](https://github.com/nischal94/sonar/issues/43) — redis 7 bump blocked upstream on celery+kombu) |
-| CI | `ci.yml` (ruff + mypy + pytest + coverage), `codeql.yml`, `pr-title.yml`, `release-please.yml` all active; `.pre-commit-config.yaml` at repo root. 8 dep PRs + 1 release PR green this session. |
-| Release pipeline | release-please auto-maintains "next release" PR; on merge it cuts tag + Release + attaches `sonar-extension-<tag>.zip` + `sonar-sbom-<tag>.spdx.json` + supply-chain footer. `v0.2.4` merge at 2026-04-17 10:52Z — verify assets with `gh release view v0.2.4 --json assets` (workflow was still running at write time). |
+| HEAD SHA | `71a868e` (`feat(auth): rate limit /auth/token to 5/min per IP (#61)`) |
+| Tests | 55/55 passing — 54 pre-existing + 1 new `test_login_endpoint_rate_limited_to_5_per_minute` |
+| Open PRs | 0 (release-please will auto-open v0.2.5 PR shortly) |
+| Open issues | 3 ([#43](https://github.com/nischal94/sonar/issues/43) redis 7 blocked upstream, [#62](https://github.com/nischal94/sonar/issues/62) uvicorn proxy-headers deploy precondition, [#63](https://github.com/nischal94/sonar/issues/63) register rate-limit + email-enumeration fix) |
+| CI | `ci.yml` (ruff + mypy + pytest + coverage), `codeql.yml`, `pr-title.yml`, `release-please.yml` all active; `.pre-commit-config.yaml` at repo root. PR #61 passed all 8 checks including two reviewer-fix pushes. |
+| Release pipeline | release-please auto-maintains "next release" PR; on merge it cuts tag + Release + attaches `sonar-extension-<tag>.zip` + `sonar-sbom-<tag>.spdx.json` + supply-chain footer. `v0.2.4` shipped 2026-04-17 10:52Z with assets verified. Next release will be `v0.2.5`. |
 | Committer audit | clean — noreply + GitHub squash-merge only, zero leaked emails |
 | Branch protection | `allow_force_pushes: false`, `allow_deletions: false` |
 | Active branches on origin | `main` only |
