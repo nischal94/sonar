@@ -1,6 +1,7 @@
 import json
 import httpx
 from dataclasses import dataclass
+from app.config import OPENAI_MODEL_EXPENSIVE
 from app.services.llm import llm_client, LLMProvider
 
 PROFILE_EXTRACTION_PROMPT = """
@@ -71,7 +72,7 @@ async def extract_capability_profile(
     prompt = PROFILE_EXTRACTION_PROMPT.format(content=content)
 
     client = llm_override if llm_override is not None else llm_client
-    raw = await client.complete(prompt=prompt, model="gpt-4o")
+    raw = await client.complete(prompt=prompt, model=OPENAI_MODEL_EXPENSIVE)
 
     # Strip markdown fences if model adds them despite instruction
     raw = raw.strip()

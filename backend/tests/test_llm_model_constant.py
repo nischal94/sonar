@@ -19,3 +19,16 @@ def test_context_generator_uses_constant():
         "context_generator.py still hardcodes 'gpt-4o' — migrate to "
         "OPENAI_MODEL_EXPENSIVE from app.config"
     )
+
+
+def test_profile_extractor_uses_constant():
+    """profile_extractor originally hardcoded `model='gpt-4o'`. Migrated to
+    OPENAI_MODEL_EXPENSIVE as part of the Wizard slice to preserve sonar/
+    CLAUDE.md's 'Single routing layer for model selection' rule."""
+    import app.services.profile_extractor as pe
+    import inspect
+    source = inspect.getsource(pe)
+    assert "gpt-4o" not in source, (
+        "profile_extractor.py still hardcodes 'gpt-4o' — migrate to "
+        "OPENAI_MODEL_EXPENSIVE from app.config"
+    )
