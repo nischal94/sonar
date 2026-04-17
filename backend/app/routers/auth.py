@@ -28,12 +28,15 @@ def create_access_token(user_id: UUID, workspace_id: UUID) -> str:
     payload = {
         "sub": str(user_id),
         "workspace_id": str(workspace_id),
-        "exp": datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        "exp": datetime.now(timezone.utc)
+        + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES),
     }
     return jwt.encode(payload, get_settings().secret_key, algorithm=ALGORITHM)
 
 
-async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)) -> User:
+async def get_current_user(
+    token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db)
+) -> User:
     try:
         payload = jwt.decode(
             token,
@@ -43,16 +46,25 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession
         )
         user_id = UUID(payload["sub"])
     except (jwt.PyJWTError, ValueError):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token"
+        )
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
+        )
     return user
 
 
 @workspace_router.post("/register", status_code=201, response_model=WorkspaceResponse)
-async def register(body: WorkspaceRegister, db: AsyncSession = Depends(get_db)):
+@limiter.limit("3/minute")
+async def register(
+    request: Request,  # required by @limiter.limit — slowapi reads it off the signature
+    body: WorkspaceRegister,
+    db: AsyncSession = Depends(get_db),
+):
     existing = await db.execute(select(User).where(User.email == body.email))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -65,12 +77,14 @@ async def register(body: WorkspaceRegister, db: AsyncSession = Depends(get_db)):
         workspace_id=workspace.id,
         email=body.email,
         hashed_password=pwd_context.hash(body.password),
-        role="owner"
+        role="owner",
     )
     db.add(user)
     await db.commit()
 
-    return WorkspaceResponse(workspace_id=workspace.id, user_id=user.id, email=user.email)
+    return WorkspaceResponse(
+        workspace_id=workspace.id, user_id=user.id, email=user.email
+    )
 
 
 class ChannelUpdateRequest(BaseModel):
