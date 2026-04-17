@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "_comment": "Sonar project-level Claude Code settings. Stop hook runs the fastest-signal verification checks (backend pytest + frontend tsc) after every turn-end, per the Cherny 'give Claude a feedback loop' pattern. Script at .claude/hooks/verify.sh has skip conditions so it only fires when there are relevant changes.",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/verify.sh\"",
+            "timeout": 90
+          }
+        ]
+      }
+    ]
+  }
+}
