@@ -19,6 +19,17 @@ def _reset_provider_singletons():
     llm._openai = None
     llm._groq = None
 
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limiter():
+    """Clear slowapi's in-memory rate-limit counters before each test so
+    test ordering doesn't create spurious 429s. Every test hits the API as
+    the same client IP under ASGITransport, so counters from one test would
+    otherwise leak into the next."""
+    from app.rate_limit import limiter
+    limiter.reset()
+    yield
+
 # Note: no user-defined `event_loop` fixture.
 # pytest-asyncio 1.x supplies a function-scoped event loop by default,
 # which is what `test_engine` (function-scoped) expects. A previous
