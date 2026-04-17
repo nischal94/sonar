@@ -10,7 +10,7 @@ from app.models.signal import Signal
 
 
 class FakeLLM:
-    async def complete(self, prompt: str, model: str) -> str:
+    async def complete(self, prompt: str, model: str, **kwargs) -> str:
         return json.dumps(
             {
                 "signals": [
@@ -101,6 +101,58 @@ async def test_confirm_persists_accepted_and_user_added_signals(client, db_sessi
     sigs = sig_result.scalars().all()
     assert len(sigs) == 5
     assert all(s.embedding is not None and len(list(s.embedding)) == 1536 for s in sigs)
+
+    app.dependency_overrides.pop(get_llm_client, None)
+    app.dependency_overrides.pop(get_embedding_provider, None)
+
+
+@pytest.mark.asyncio
+async def test_confirm_rejects_second_call_with_409(client, db_session):
+    """Regression test for the PR #68 P1: idempotency. A second /confirm
+    call for the same proposal_event_id must 409, not silently create
+    duplicate Signal rows and clobber the telemetry breakdown."""
+    app.dependency_overrides[get_llm_client] = lambda: FakeLLM()
+    app.dependency_overrides[get_embedding_provider] = lambda: FakeEmbed()
+
+    await client.post(
+        "/workspace/register",
+        json={"workspace_name": "I", "email": "idem@i.com", "password": "pass123"},
+    )
+    tok = (
+        await client.post(
+            "/auth/token", data={"username": "idem@i.com", "password": "pass123"}
+        )
+    ).json()["access_token"]
+    hdrs = {"Authorization": f"Bearer {tok}"}
+
+    propose = (
+        await client.post(
+            "/workspace/signals/propose",
+            json={"what_you_sell": "X services"},
+            headers=hdrs,
+        )
+    ).json()
+    event_id = propose["proposal_event_id"]
+
+    first = await client.post(
+        "/workspace/signals/confirm",
+        json={"proposal_event_id": event_id, "accepted": [0, 1]},
+        headers=hdrs,
+    )
+    assert first.status_code == 200
+    assert len(first.json()["signal_ids"]) == 2
+
+    second = await client.post(
+        "/workspace/signals/confirm",
+        json={"proposal_event_id": event_id, "accepted": [0, 1]},
+        headers=hdrs,
+    )
+    assert second.status_code == 409
+    assert "already confirmed" in second.json()["detail"].lower()
+
+    # Crucially, no duplicate Signal rows were created.
+    sigs = (await db_session.execute(select(Signal))).scalars().all()
+    assert len(sigs) == 2
 
     app.dependency_overrides.pop(get_llm_client, None)
     app.dependency_overrides.pop(get_embedding_provider, None)

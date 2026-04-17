@@ -9,7 +9,7 @@ from app.models.signal_proposal_event import SignalProposalEvent
 
 
 class FakeLLM:
-    async def complete(self, prompt: str, model: str) -> str:
+    async def complete(self, prompt: str, model: str, **kwargs) -> str:
         return json.dumps(
             {
                 "signals": [

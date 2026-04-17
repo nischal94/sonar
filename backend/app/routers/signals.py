@@ -50,10 +50,19 @@ async def propose_signals(
     llm: LLMProvider = Depends(get_llm_client),
 ):
     user_msg = build_user_message(body.what_you_sell, body.icp)
-    # Compose the prompt for the existing `complete(prompt, model)` signature.
-    # Two-part prompt delimited by role markers so the system/user separation is preserved.
-    prompt = f"<|system|>\n{SYSTEM_PROMPT}\n<|user|>\n{user_msg}"
-    raw = await llm.complete(prompt, model=OPENAI_MODEL_EXPENSIVE)
+    # Send system + user as separate messages at the API boundary so user input
+    # (in user_msg) cannot spoof the system role via `<|system|>`-style delimiter
+    # strings. Per sonar/CLAUDE.md 'Prompt injection defense is mandatory' —
+    # topological separation at the role level, not inline via text markers.
+    # max_tokens=4096 accommodates worst-case 10-signal output with long
+    # example_post bodies (up to 500 chars each × 10 + phrase + JSON structure
+    # can exceed the default 2048 cap and cause truncated output → 502 parse fail).
+    raw = await llm.complete(
+        user_msg,
+        model=OPENAI_MODEL_EXPENSIVE,
+        system=SYSTEM_PROMPT,
+        max_tokens=4096,
+    )
     try:
         payload = json.loads(_strip_markdown_fence(raw))
         signals_raw = payload["signals"]
@@ -98,6 +107,11 @@ async def confirm_signals(
         raise HTTPException(
             status_code=404, detail="Proposal event not found for this workspace"
         )
+    # Idempotency guard: reject retries to prevent duplicate Signal rows and
+    # clobbering of the telemetry breakdown. If the client genuinely wants to
+    # re-wizard, they start a fresh /propose call (new proposal_event_id).
+    if event.completed_at is not None:
+        raise HTTPException(status_code=409, detail="Proposal event already confirmed")
 
     # Resolve final signal list from the three buckets (accepted / edited / user_added).
     # Rejected are just recorded; they don't produce signal rows.
