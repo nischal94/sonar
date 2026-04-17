@@ -19,6 +19,15 @@ def _reset_provider_singletons():
     llm._openai = None
     llm._groq = None
 
+
+# NOTE: rate-limiter reset is handled inside the `client` fixture below,
+# NOT as a separate autouse fixture. An autouse fixture's ordering relative
+# to `client` is non-deterministic (both are function-scoped), which would
+# make this test: client-setup → limiter-reset vs limiter-reset → client-setup.
+# If the limiter is never reset before a test that happens to be the 6th call
+# in a run, it flakes with a spurious 429. Resetting inside `client` setup
+# guarantees the ordering.
+
 # Note: no user-defined `event_loop` fixture.
 # pytest-asyncio 1.x supplies a function-scoped event loop by default,
 # which is what `test_engine` (function-scoped) expects. A previous
@@ -50,6 +59,11 @@ async def client(db_session):
     async def override_get_db():
         yield db_session
     app.dependency_overrides[get_db] = override_get_db
+    # Reset slowapi counters per-test — ASGITransport reuses one client IP,
+    # so without this any test hitting a rate-limited endpoint accumulates
+    # counters that would leak into subsequent tests.
+    from app.rate_limit import limiter
+    limiter.reset()
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
         yield c
     app.dependency_overrides.clear()

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +12,7 @@ from app.models.user import User
 from app.models.workspace import Workspace
 from app.schemas.workspace import WorkspaceRegister, WorkspaceResponse, TokenResponse
 from app.config import get_settings
+from app.rate_limit import limiter
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 workspace_router = APIRouter(prefix="/workspace", tags=["workspace"])
@@ -92,7 +93,12 @@ async def update_channels(
 
 
 @router.post("/token", response_model=TokenResponse)
-async def login(form: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(
+    request: Request,  # required by @limiter.limit — slowapi reads it off the signature
+    form: OAuth2PasswordRequestForm = Depends(),
+    db: AsyncSession = Depends(get_db),
+):
     result = await db.execute(select(User).where(User.email == form.username))
     user = result.scalar_one_or_none()
     if not user or not pwd_context.verify(form.password, user.hashed_password):
