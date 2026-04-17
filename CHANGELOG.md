@@ -2,6 +2,25 @@
 
 All notable changes to Sonar are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
+## [0.3.0](https://github.com/nischal94/sonar/compare/v0.2.4...v0.3.0) (2026-04-17)
+
+
+### Added
+
+* **auth:** rate limit /auth/token to 5/min per IP ([#61](https://github.com/nischal94/sonar/issues/61)) ([71a868e](https://github.com/nischal94/sonar/commit/71a868efa8635ac68ce6c59ad245f4d52b77dd8b))
+* **auth:** rate limit /workspace/register to 3/min per IP ([#67](https://github.com/nischal94/sonar/issues/67)) ([735ca5b](https://github.com/nischal94/sonar/commit/735ca5bb24417a679e08a7418e67f1ad7b864b32))
+* **infra+wizard:** testing ladder + Wizard Task 1 (LLM tier bump) ([#64](https://github.com/nischal94/sonar/issues/64)) ([fd79644](https://github.com/nischal94/sonar/commit/fd796449ebc04840aae17572f072e1d5823c63cb))
+* **wizard:** backend — Tasks 2-9 of Phase 2 Wizard plan ([#68](https://github.com/nischal94/sonar/issues/68)) ([a9ef017](https://github.com/nischal94/sonar/commit/a9ef01763897192e7ee8fee0599f96fcd536cf58))
+
+
+### Documentation
+
+* **phase-2:** wizard implementation decisions (brainstorm output) ([6a67e91](https://github.com/nischal94/sonar/commit/6a67e91dd507ebe2b33bfd28f5e27cb9befe1ed5))
+* **phase-2:** wizard implementation plan (12 tasks) ([faee435](https://github.com/nischal94/sonar/commit/faee4355d14f32a15af73640e37a3f2fa3ee607d))
+* **todo:** session-3 continued — rate limit shipped, Priority 8 done ([0d564a1](https://github.com/nischal94/sonar/commit/0d564a17e0115493639d4cb0d5509d840cc355d4))
+* **todo:** session-3 sync — 9 PRs merged, v0.2.4 shipped, fix stale path ([3c559af](https://github.com/nischal94/sonar/commit/3c559afb6a5b38b9cb44dca6ff1c3f95adc65f74))
+* **todo:** surface pre-launch gaps in Resume Here block ([2cbe830](https://github.com/nischal94/sonar/commit/2cbe83007e4cf2627d9c9e1626dcc75759f7fd9e))
+
 ## [0.2.4](https://github.com/nischal94/sonar/compare/v0.2.3...v0.2.4) (2026-04-17)
 
 
