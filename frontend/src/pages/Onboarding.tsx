@@ -38,7 +38,7 @@ export function Onboarding() {
     const url = (form.elements.namedItem('url') as HTMLInputElement).value;
     try {
       await profileAPI.extract({ url });
-      navigate('/alerts');
+      navigate('/signals/setup');
     } catch {
       setError('Failed to extract profile. Check the URL and try again.');
     }
