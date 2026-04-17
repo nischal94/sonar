@@ -2,6 +2,25 @@
 
 All notable changes to Sonar are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
+## [0.2.4](https://github.com/nischal94/sonar/compare/v0.2.3...v0.2.4) (2026-04-17)
+
+
+### Documentation
+
+* **todo:** final session-2 sync — v0.2.3 shipped, Node 24 action bumps landed ([4b435ac](https://github.com/nischal94/sonar/commit/4b435ac30eabfbe7116d2c6680161c1624329f05))
+
+
+### Chores
+
+* **deps-dev:** bump typescript 5.9.3 → 6.0.2 in /frontend ([#55](https://github.com/nischal94/sonar/issues/55)) ([ade26a6](https://github.com/nischal94/sonar/commit/ade26a6fb8b4c64664262f028b2bc03b52afee48))
+* **deps:** bump follow-redirects 1.15.11 → 1.16.0 in /frontend ([#58](https://github.com/nischal94/sonar/issues/58)) ([4ce2202](https://github.com/nischal94/sonar/commit/4ce2202c53709a52c9f29bfc140d1f6b81d12182))
+* **deps:** bump mako 1.3.10 → 1.3.11 ([#59](https://github.com/nischal94/sonar/issues/59)) ([f8b47c7](https://github.com/nischal94/sonar/commit/f8b47c76f31ddb741da3c442e91073b1d26e9c46))
+* **deps:** email-validator floor &gt;=2.2.0 → &gt;=2.3.0 (codify lock) ([#54](https://github.com/nischal94/sonar/issues/54)) ([d12891d](https://github.com/nischal94/sonar/commit/d12891d454099cf773aceb628e36081a7f36aa4e))
+* **deps:** openai floor ^1.40 → ^2.31 (codify already-resolved lock) ([#57](https://github.com/nischal94/sonar/issues/57)) ([f43e3ac](https://github.com/nischal94/sonar/commit/f43e3ac8b147e1ac87ef9872b323fd5598cede60))
+* **deps:** python-multipart floor &gt;=0.0.9 → &gt;=0.0.26 (codify lock) ([#52](https://github.com/nischal94/sonar/issues/52)) ([00af92b](https://github.com/nischal94/sonar/commit/00af92bc152565affe44b7cc0d7ec20d9c8c0561))
+* **deps:** python-telegram-bot floor &gt;=21.5 → &gt;=22.7 (codify lock) ([#53](https://github.com/nischal94/sonar/issues/53)) ([3eddd09](https://github.com/nischal94/sonar/commit/3eddd0990a5ace0ddec8fc60cba07c7e7ce22dec))
+* **deps:** twilio floor &gt;=9.3.0 → &gt;=9.10.4 (codify lock) ([#56](https://github.com/nischal94/sonar/issues/56)) ([8555ecc](https://github.com/nischal94/sonar/commit/8555ecc087a7881be5bfebc0792f3ccb28cb91d4))
+
 ## [0.2.3](https://github.com/nischal94/sonar/compare/v0.2.2...v0.2.3) (2026-04-13)
 
 
