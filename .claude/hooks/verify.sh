@@ -81,6 +81,20 @@ if [ -d "frontend/node_modules" ]; then
 $(echo "$TSC_OUT" | tail -40)
 "
   fi
+
+  # 3. Frontend unit tests (vitest) — only if any *.test.* files exist under src/.
+  #    Keep this FAST: we use `vitest run` (single pass, no watch).
+  if find frontend/src -name '*.test.*' -print -quit 2>/dev/null | grep -q .; then
+    VITEST_OUT=$(cd frontend && npm run --silent test:run 2>&1)
+    VITEST_EXIT=$?
+    if [ $VITEST_EXIT -ne 0 ]; then
+      FAILED_STEPS="$FAILED_STEPS vitest"
+      OUTPUT="$OUTPUT
+--- vitest (exit $VITEST_EXIT) ---
+$(echo "$VITEST_OUT" | tail -40)
+"
+    fi
+  fi
 fi
 
 if [ -n "$FAILED_STEPS" ]; then
@@ -95,7 +109,10 @@ EOF
   exit 2
 fi
 
-# Success path — quiet by default, one confirmation line.
-LAST_LINE=$(echo "$TEST_OUT" | tail -1)
-echo "✓ Sonar Stop-hook verified: $LAST_LINE${TSC_EXIT+ + tsc OK}" >&2
+# Success path — quiet by default, one confirmation line listing every step that ran.
+STEPS_PASSED="pytest"
+[ -n "${TSC_EXIT+x}" ] && STEPS_PASSED="$STEPS_PASSED + tsc"
+[ -n "${VITEST_EXIT+x}" ] && STEPS_PASSED="$STEPS_PASSED + vitest"
+PYTEST_SUMMARY=$(echo "$TEST_OUT" | tail -1)
+echo "✓ Sonar Stop-hook verified ($STEPS_PASSED): $PYTEST_SUMMARY" >&2
 exit 0
