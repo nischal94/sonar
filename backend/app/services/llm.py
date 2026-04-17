@@ -2,6 +2,8 @@ from typing import Protocol
 from openai import AsyncOpenAI
 from groq import AsyncGroq
 
+from app.config import OPENAI_MODEL_EXPENSIVE
+
 class LLMProvider(Protocol):
     async def complete(self, prompt: str, model: str) -> str: ...
 
@@ -11,7 +13,7 @@ class OpenAILLMProvider:
         from app.config import get_settings
         self._client = AsyncOpenAI(api_key=get_settings().openai_api_key)
 
-    async def complete(self, prompt: str, model: str = "gpt-4o") -> str:
+    async def complete(self, prompt: str, model: str = OPENAI_MODEL_EXPENSIVE) -> str:
         response = await self._client.chat.completions.create(
             model=model,
             messages=[{"role": "user", "content": prompt}],
@@ -41,7 +43,7 @@ _groq: GroqLLMProvider | None = None
 
 
 class _LazyOpenAI:
-    async def complete(self, prompt: str, model: str = "gpt-4o") -> str:
+    async def complete(self, prompt: str, model: str = OPENAI_MODEL_EXPENSIVE) -> str:
         global _openai
         if _openai is None:
             _openai = OpenAILLMProvider()

@@ -1,5 +1,6 @@
 import json
 from dataclasses import dataclass, field
+from app.config import OPENAI_MODEL_EXPENSIVE
 from app.services.llm import openai_provider, groq_provider
 from app.services.scorer import Priority
 
@@ -49,7 +50,7 @@ async def generate_alert_context(
 ) -> AlertContext:
     """
     Generate match reason, outreach drafts, and theme tags using LLM.
-    Routes to GPT-4o mini for HIGH priority, Groq for MEDIUM/LOW.
+    Routes to OPENAI_MODEL_EXPENSIVE for HIGH priority, Groq for MEDIUM/LOW.
     """
     prompt = CONTEXT_GENERATION_PROMPT.format(
         capability_profile=capability_profile,
@@ -62,7 +63,7 @@ async def generate_alert_context(
     )
 
     if priority == Priority.HIGH:
-        raw = await openai_provider.complete(prompt=prompt, model="gpt-4o-mini")
+        raw = await openai_provider.complete(prompt=prompt, model=OPENAI_MODEL_EXPENSIVE)
     else:
         raw = await groq_provider.complete(prompt=prompt, model="llama-3.3-70b-versatile")
 
