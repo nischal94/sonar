@@ -1,17 +1,23 @@
 from __future__ import annotations
 import json
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
+from app.models.signal import Signal
 from app.models.signal_proposal_event import SignalProposalEvent
 from app.models.user import User
 from app.routers.auth import get_current_user
 from app.rate_limit import limiter
 from app.schemas.wizard import (
+    ConfirmSignalsRequest,
+    ConfirmSignalsResponse,
     ProposeSignalsRequest,
     ProposedSignal,
     ProposeSignalsResponse,
 )
+from app.services.embedding import get_embedding_provider, EmbeddingProvider
 from app.services.llm import get_llm_client, LLMProvider
 from app.config import OPENAI_MODEL_EXPENSIVE
 from app.prompts.propose_signals import (
@@ -71,3 +77,75 @@ async def propose_signals(
         prompt_version=PROMPT_VERSION,
         signals=signals,
     )
+
+
+@router.post("/confirm", response_model=ConfirmSignalsResponse)
+async def confirm_signals(
+    body: ConfirmSignalsRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    embed: EmbeddingProvider = Depends(get_embedding_provider),
+):
+    # Look up the telemetry event — must belong to the caller's workspace.
+    result = await db.execute(
+        select(SignalProposalEvent).where(
+            SignalProposalEvent.id == body.proposal_event_id,
+            SignalProposalEvent.workspace_id == current_user.workspace_id,
+        )
+    )
+    event = result.scalar_one_or_none()
+    if event is None:
+        raise HTTPException(
+            status_code=404, detail="Proposal event not found for this workspace"
+        )
+
+    # Resolve final signal list from the three buckets (accepted / edited / user_added).
+    # Rejected are just recorded; they don't produce signal rows.
+    final_signals: list[dict] = []
+    proposed = event.proposed  # list[dict] with the original LLM output
+
+    for idx in body.accepted:
+        if 0 <= idx < len(proposed):
+            final_signals.append(proposed[idx])
+
+    for pair in body.edited:
+        final_signals.append(
+            {
+                "phrase": pair.final_phrase,
+                "example_post": pair.final_example_post,
+                "intent_strength": pair.final_intent_strength,
+            }
+        )
+
+    for sig in body.user_added:
+        final_signals.append(sig.model_dump())
+
+    # Embed each confirmed signal's phrase and persist.
+    signal_ids: list = []
+    for s in final_signals:
+        vector = await embed.embed(s["phrase"])
+        row = Signal(
+            workspace_id=current_user.workspace_id,
+            phrase=s["phrase"],
+            example_post=s["example_post"],
+            intent_strength=s["intent_strength"],
+            embedding=vector,
+            enabled=True,
+        )
+        db.add(row)
+        await db.flush()
+        signal_ids.append(row.id)
+
+    # Mark the telemetry event complete.
+    event.accepted_ids = [str(i) for i in body.accepted]
+    event.edited_pairs = [p.model_dump() for p in body.edited]
+    event.rejected_ids = [str(i) for i in body.rejected]
+    event.user_added = [s.model_dump() for s in body.user_added]
+    event.completed_at = datetime.now(timezone.utc)
+
+    await db.commit()
+
+    # NOTE: marking the capability profile active is a placeholder until the
+    # capability-profile-versions flow is extended. For the wizard-only scope,
+    # profile_active=True is returned unconditionally once signals are persisted.
+    return ConfirmSignalsResponse(signal_ids=signal_ids, profile_active=True)
