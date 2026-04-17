@@ -102,9 +102,11 @@ Every Phase 2+ contribution aims to meet these. When skipping something, call it
 
 ### LLM and agent discipline — Sonar is LLM-heavy; read carefully
 - **Prompts are code.** Live in `app/prompts/<name>.py`, version-controlled, reviewed on every change. No dynamic string-building into system prompts.
+- **Prompts live in `app/prompts/<name>.py`.** Each prompt module exports `PROMPT_VERSION: str`, a static `SYSTEM_PROMPT`, a `build_user_message(...)` function that composes the user turn (the ONLY place user input is interpolated), and a `RESPONSE_JSON_SCHEMA` for OpenAI Structured Outputs. Every call logs `PROMPT_VERSION` alongside. Bump the version on every content change. First entry under this convention: `app/prompts/propose_signals.py` (Wizard slice, 2026-04-17).
+
 - **`max_tokens` on every LLM call.** No exceptions. Input token count estimated before sending to catch blowup early.
 - **Cost tracked per workspace/feature.** Log `{workspace_id, feature, input_tokens, output_tokens, cost_usd}` on every call. Hard per-workspace daily cap so runaway loops can't eat the budget.
-- **Single routing layer for model selection.** Cheap models (Groq) for bulk work; expensive models (GPT-4o-mini) for critical work. Fallback chains defined explicitly.
+- **Single routing layer for model selection.** Cheap models (Groq) for bulk work; expensive models (`gpt-5.4-mini`) for critical work. Fallback chains defined explicitly. Upgraded from `gpt-4o-mini` on 2026-04-17 as part of the Wizard slice (PR #64). Single routing layer preserved via `OPENAI_MODEL_EXPENSIVE` constant in `app/config.py`. To bump again, edit the constant and update this rule in lockstep.
 - **Prompt injection defense is mandatory.** User-controlled input (LinkedIn post content!) goes in the **user message** position only. Never f-string user input into the system prompt.
 - **LLM output is untrusted.** Parse with Pydantic / strict JSON schemas. Retry on parse failure (budget: 2 retries). Never pass output directly to shell / SQL / file paths without validation.
 - **Structured outputs where supported.** OpenAI `response_format=<PydanticModel>` is the default path.
@@ -430,7 +432,7 @@ git merge main
 - Keyword pre-filter → embedding cosine similarity → 3-dimension combined score (relevance 50%, relationship 30%, timing 20%)
 - Relationship score defaults by connection degree: 1st=0.90, 2nd=0.60, 3rd=0.30 + interaction boost
 - Timing decays linearly over 24 hours
-- HIGH priority (≥0.80) → GPT-4o-mini for outreach drafts
+- HIGH priority (≥0.80) → `gpt-5.4-mini` for outreach drafts
 - MEDIUM/LOW → Groq + Llama-3.3-70B
 - Thresholds are per-workspace tunable via `workspaces.matching_threshold` (default 0.72)
 
