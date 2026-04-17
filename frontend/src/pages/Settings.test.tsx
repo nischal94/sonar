@@ -17,7 +17,7 @@ describe("Settings page", () => {
 
   it("renders all four channel input fields", () => {
     render(<Settings />);
-    expect(screen.getByPlaceholderText(/hooks\.slack\.com/i)).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/^https:\/\/hooks\.slack\.com/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/you@company\.com/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/123456789/i)).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/\+14155238886/i)).toBeInTheDocument();
@@ -46,7 +46,7 @@ describe("Settings page", () => {
     };
 
     render(<Settings />);
-    await user.type(screen.getByPlaceholderText(/hooks\.slack\.com/i), "https://hooks.slack.com/services/X");
+    await user.type(screen.getByPlaceholderText(/^https:\/\/hooks\.slack\.com/i), "https://hooks.slack.com/services/X");
     await user.click(screen.getByRole("button", { name: /save/i }));
 
     const [, body] = api.patch.mock.calls[0];
