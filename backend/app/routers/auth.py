@@ -95,7 +95,7 @@ async def update_channels(
 @router.post("/token", response_model=TokenResponse)
 @limiter.limit("5/minute")
 async def login(
-    request: Request,
+    request: Request,  # required by @limiter.limit — slowapi reads it off the signature
     form: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_db),
 ):

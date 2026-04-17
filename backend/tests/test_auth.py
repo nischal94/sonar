@@ -80,7 +80,13 @@ async def test_login_endpoint_rate_limited_to_5_per_minute(client):
     """Per sonar/CLAUDE.md Security: /auth/token is rate-limited to prevent
     credential-stuffing and brute-force attacks. Per-IP limit is 5/minute.
     The 6th request within a minute returns 429 Too Many Requests
-    regardless of whether the credentials are valid."""
+    regardless of whether the credentials are valid.
+
+    NOTE: ASGITransport makes every test appear as the same client IP, so
+    this test exercises the '5-then-429' counter behavior only — it does NOT
+    prove per-IP isolation. Per-IP keying is a property of
+    slowapi.util.get_remote_address and is validated by inspection, not here.
+    """
     await client.post("/workspace/register", json={
         "workspace_name": "Rate Limit Test",
         "email": "rl@test.com",
@@ -103,3 +109,7 @@ async def test_login_endpoint_rate_limited_to_5_per_minute(client):
     assert resp.status_code == 429, (
         f"6th request should be rate-limited (429), got {resp.status_code}"
     )
+    # Body must NOT echo slowapi's default policy string; the custom handler
+    # returns a generic message so attackers can't calibrate the window.
+    assert resp.json() == {"detail": "Too many requests"}
+    assert resp.headers.get("Retry-After") == "60"
