@@ -12,7 +12,7 @@ against the same transaction; the Celery wrapper is a thin delegate.
 from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
-from sqlalchemy import select, and_
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.person_signal_summary import PersonSignalSummary
 from app.models.post import Post
@@ -77,33 +77,46 @@ async def _trend_direction(
     connection_id: UUID,
     now: datetime,
 ) -> str:
-    """Compare matched-post counts for this week vs last week → up / flat / down."""
+    """Compare matched-post counts for this week vs last week → up / flat / down.
+
+    Uses COALESCE(posted_at, ingested_at) for the window filter — Apify-backfilled
+    posts sometimes have null posted_at. Without the coalesce, such posts would
+    be silently excluded from trend counts and prolific-but-backfilled people
+    would read as `flat` forever.
+    """
     this_week_start = now - timedelta(days=7)
     last_week_start = now - timedelta(days=14)
 
+    # Coalesce ensures posts with null posted_at still contribute to the window.
+    post_ts = func.coalesce(Post.posted_at, Post.ingested_at)
+
     this_week = await db.execute(
-        select(Post.id).where(
+        select(func.count())
+        .select_from(Post)
+        .where(
             and_(
                 Post.workspace_id == workspace_id,
                 Post.connection_id == connection_id,
                 Post.matched.is_(True),
-                Post.posted_at >= this_week_start,
+                post_ts >= this_week_start,
             )
         )
     )
     last_week = await db.execute(
-        select(Post.id).where(
+        select(func.count())
+        .select_from(Post)
+        .where(
             and_(
                 Post.workspace_id == workspace_id,
                 Post.connection_id == connection_id,
                 Post.matched.is_(True),
-                Post.posted_at >= last_week_start,
-                Post.posted_at < this_week_start,
+                post_ts >= last_week_start,
+                post_ts < this_week_start,
             )
         )
     )
-    this_week_count = len(this_week.scalars().all())
-    last_week_count = len(last_week.scalars().all())
+    this_week_count = this_week.scalar_one()
+    last_week_count = last_week.scalar_one()
 
     if this_week_count > last_week_count:
         return "up"

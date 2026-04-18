@@ -1,4 +1,5 @@
 from __future__ import annotations
+import re
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import select, and_
@@ -23,18 +24,51 @@ def _snippet(content: str, max_chars: int = 200) -> str:
     return content[:max_chars].rsplit(" ", 1)[0] + "…"
 
 
+_LINKEDIN_ACTIVITY_ID_RE = re.compile(r"^\d+$")
+
+
 def _post_url(linkedin_post_id: str | None) -> str | None:
+    """Synthesize a LinkedIn thread URL from a stored post id.
+
+    Returns None when the id is empty or an unrecognized shape — emitting a
+    malformed URL would cause silent 404s in the "View thread" UI, which is
+    worse than hiding the link. Supported shapes:
+      - full http(s) URL: passthrough
+      - urn:li:activity:<digits>: wrap in /feed/update/
+      - <digits>: wrap in /feed/update/urn:li:activity:<digits>
+    """
     if not linkedin_post_id:
         return None
-    if linkedin_post_id.startswith("http"):
+    if linkedin_post_id.startswith(("http://", "https://")):
         return linkedin_post_id
-    if linkedin_post_id.startswith("urn:"):
-        return f"https://www.linkedin.com/feed/update/{linkedin_post_id}/"
-    return f"https://www.linkedin.com/feed/update/urn:li:activity:{linkedin_post_id}/"
+    if linkedin_post_id.startswith("urn:li:activity:"):
+        suffix = linkedin_post_id[len("urn:li:activity:") :]
+        if _LINKEDIN_ACTIVITY_ID_RE.match(suffix):
+            return f"https://www.linkedin.com/feed/update/{linkedin_post_id}/"
+        return None
+    if _LINKEDIN_ACTIVITY_ID_RE.match(linkedin_post_id):
+        return (
+            f"https://www.linkedin.com/feed/update/urn:li:activity:{linkedin_post_id}/"
+        )
+    return None
+
+
+def _workspace_rate_limit_key(request: Request) -> str:
+    """Rate-limit by authenticated workspace (via JWT) rather than IP.
+    Falls back to IP when no Authorization header (unauthenticated requests
+    will 401 anyway, but slowapi keys fire before auth runs)."""
+    auth = request.headers.get("authorization", "")
+    if auth.startswith("Bearer "):
+        # Best-effort extraction. Full verification happens in get_current_user.
+        # Here we just need a stable per-workspace key; using the raw token is
+        # fine since different tokens → different keys, same workspace keyed
+        # identically across tabs.
+        return f"ws-token:{auth[7:57]}"  # first 50 chars is ample entropy
+    return request.client.host if request.client else "anon"
 
 
 @router.get("/people", response_model=DashboardPeopleResponse)
-@limiter.limit("30/minute")
+@limiter.limit("60/minute", key_func=_workspace_rate_limit_key)
 async def get_dashboard_people(
     request: Request,  # required by @limiter.limit
     threshold: float | None = Query(None, ge=0.0, le=1.0),
@@ -43,14 +77,16 @@ async def get_dashboard_people(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    # Resolve threshold: explicit param > workspace default > 0.65 fallback
+    # Resolve threshold: explicit param > workspace default > 0.65 fallback.
+    # Using `is None` (not truthiness) so an explicit 0.0 doesn't collapse to fallback.
     if threshold is None:
         ws_result = await db.execute(
             select(Workspace.matching_threshold).where(
                 Workspace.id == current_user.workspace_id
             )
         )
-        threshold = ws_result.scalar_one_or_none() or 0.65
+        ws_default = ws_result.scalar_one_or_none()
+        threshold = ws_default if ws_default is not None else 0.65
 
     # Parse relationship filter — "1,2" → [1, 2]
     try:
@@ -59,6 +95,10 @@ async def get_dashboard_people(
         raise HTTPException(
             status_code=422,
             detail="Invalid relationship param; expected comma-separated ints",
+        )
+    if not degrees:
+        raise HTTPException(
+            status_code=422, detail="relationship param cannot be empty"
         )
     if not all(d in (1, 2) for d in degrees):
         raise HTTPException(
@@ -98,7 +138,7 @@ async def get_dashboard_people(
             title=conn.headline,
             company=conn.company,
             relationship_degree=conn.degree,
-            mutual_count=None,
+            mutual_count=conn.mutual_count if conn.degree == 2 else None,
             aggregate_score=summary.aggregate_score,
             trend_direction=summary.trend_direction,
             last_signal_at=summary.last_signal_at,

@@ -263,12 +263,24 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
             matched_signal_id = UUID(ring1_matches[0])
         elif ring2_matches:
             matched_signal_id = UUID(ring2_matches[0]["signal_id"])
-        await run_dashboard_aggregation_hook(
-            db,
-            post_id=post_id,
-            signal_id=matched_signal_id,
-            combined_score=scoring.combined_score,
-        )
+        # Dashboard aggregation must NOT fail the pipeline — alert delivery is
+        # the primary value path. If the hook raises (DB timeout, transient
+        # failure), log and continue; the next scored post for this person
+        # will re-run the aggregation. Without this guard, a hook failure
+        # would leave post.processed_at=None + no alert + no retry — worse
+        # than a skipped aggregation.
+        try:
+            await run_dashboard_aggregation_hook(
+                db,
+                post_id=post_id,
+                signal_id=matched_signal_id,
+                combined_score=scoring.combined_score,
+            )
+        except Exception as exc:
+            logger.exception(
+                "[pipeline] run_dashboard_aggregation_hook failed, continuing: %s",
+                exc,
+            )
 
         # Stage 10: Create alert
         alert = Alert(
