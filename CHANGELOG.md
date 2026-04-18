@@ -2,6 +2,19 @@
 
 All notable changes to Sonar are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
+## [0.6.0](https://github.com/nischal94/sonar/compare/v0.5.0...v0.6.0) (2026-04-18)
+
+
+### Added
+
+* **backfill:** Phase 2 Backfill — 1st-degree Day-One (Tasks 2-11 + 13) ([#77](https://github.com/nischal94/sonar/issues/77)) ([1fb2be1](https://github.com/nischal94/sonar/commit/1fb2be14985ae7ff03137d4b555df900287e6127))
+
+
+### Documentation
+
+* **phase-2:** backfill implementation decisions (brainstorm output) ([dc824ee](https://github.com/nischal94/sonar/commit/dc824ee0086ddbeebc1dff04d6f9298c58eeee99))
+* **phase-2:** backfill implementation plan (13 tasks) ([278d268](https://github.com/nischal94/sonar/commit/278d268de0e5fef4f3e3e3e3696b3ad128abc9f2))
+
 ## [0.5.0](https://github.com/nischal94/sonar/compare/v0.4.0...v0.5.0) (2026-04-18)
 
 
