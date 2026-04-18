@@ -2,11 +2,41 @@ import asyncio
 import logging
 from uuid import UUID
 from app.workers.celery_app import celery_app
+from app.workers.incremental_trending import update_person_aggregation
 
 logger = logging.getLogger(__name__)
 
 
-@celery_app.task(name="app.workers.pipeline.process_post_pipeline", bind=True, max_retries=3)
+async def run_dashboard_aggregation_hook(
+    db,
+    *,
+    post_id,
+    signal_id,
+    combined_score,
+) -> None:
+    """Test-friendly entry point into the dashboard aggregation update.
+
+    Also the call-site used from the real pipeline after scoring completes.
+    `signal_id` may be None — `update_person_aggregation` no-ops in that case.
+    """
+    from sqlalchemy import select
+    from app.models.post import Post
+
+    post_result = await db.execute(select(Post).where(Post.id == post_id))
+    post = post_result.scalar_one()
+    await update_person_aggregation(
+        db,
+        workspace_id=post.workspace_id,
+        connection_id=post.connection_id,
+        post_id=post.id,
+        signal_id=signal_id,
+        combined_score=combined_score,
+    )
+
+
+@celery_app.task(
+    name="app.workers.pipeline.process_post_pipeline", bind=True, max_retries=3
+)
 def process_post_pipeline(self, post_id: str, workspace_id: str):
     """
     Main processing pipeline for a single ingested post.
@@ -49,7 +79,7 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
         result = await db.execute(
             select(CapabilityProfileVersion)
             .where(CapabilityProfileVersion.workspace_id == workspace_id)
-            .where(CapabilityProfileVersion.is_active == True)
+            .where(CapabilityProfileVersion.is_active.is_(True))
         )
         profile = result.scalar_one_or_none()
         if not profile:
@@ -68,7 +98,8 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
         ]
         if any(term in content_lower for term in full_blocklist):
             await db.execute(
-                update(Post).where(Post.id == post_id)
+                update(Post)
+                .where(Post.id == post_id)
                 .values(processed_at=datetime.now(timezone.utc), matched=False)
             )
             await db.commit()
@@ -79,12 +110,18 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
         post_embedding = await embedding_provider.embed(post.content)
 
         # Stage 2: Load active signals
-        signal_rows = (await db.execute(
-            select(Signal).where(
-                Signal.workspace_id == workspace_id,
-                Signal.enabled == True,
+        signal_rows = (
+            (
+                await db.execute(
+                    select(Signal).where(
+                        Signal.workspace_id == workspace_id,
+                        Signal.enabled.is_(True),
+                    )
+                )
             )
-        )).scalars().all()
+            .scalars()
+            .all()
+        )
 
         # Stage 3: Ring 1 — keyword matches
         ring1_matches = match_post_to_ring1_signals(post.content, signal_rows)
@@ -96,7 +133,9 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
 
         # Stage 5: Legacy capability-profile relevance score
         row = await db.execute(
-            text("SELECT embedding::text FROM capability_profile_versions WHERE id = :id"),
+            text(
+                "SELECT embedding::text FROM capability_profile_versions WHERE id = :id"
+            ),
             {"id": str(profile.id)},
         )
         emb_str = row.scalar_one_or_none()
@@ -109,10 +148,13 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
             logger.warning(
                 "pipeline_skipped_missing_capability_embedding "
                 "workspace_id=%s profile_id=%s post_id=%s",
-                workspace_id, profile.id, post_id,
+                workspace_id,
+                profile.id,
+                post_id,
             )
             await db.execute(
-                update(Post).where(Post.id == post_id)
+                update(Post)
+                .where(Post.id == post_id)
                 .values(processed_at=datetime.now(timezone.utc), matched=False)
             )
             await db.commit()
@@ -136,7 +178,9 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
             {"e": post_emb_str, "id": str(post_id)},
         )
         await db.execute(
-            update(Post).where(Post.id == post_id).values(
+            update(Post)
+            .where(Post.id == post_id)
+            .values(
                 ring1_matches=ring1_matches,
                 ring2_matches=ring2_matches,
                 relevance_score=relevance_score,
@@ -147,7 +191,8 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
         if connection is None:
             # Orphan post — can't score relationship dimension, mark processed
             await db.execute(
-                update(Post).where(Post.id == post_id)
+                update(Post)
+                .where(Post.id == post_id)
                 .values(processed_at=datetime.now(timezone.utc), matched=False)
             )
             await db.commit()
@@ -165,7 +210,9 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
         threshold = workspace.matching_threshold or 0.72
         if scoring.combined_score < threshold:
             await db.execute(
-                update(Post).where(Post.id == post_id).values(
+                update(Post)
+                .where(Post.id == post_id)
+                .values(
                     processed_at=datetime.now(timezone.utc),
                     matched=False,
                     relevance_score=scoring.relevance_score,
@@ -192,7 +239,9 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
 
         # Stage 9: Persist themes + final scores
         await db.execute(
-            update(Post).where(Post.id == post_id).values(
+            update(Post)
+            .where(Post.id == post_id)
+            .values(
                 processed_at=datetime.now(timezone.utc),
                 matched=True,
                 relevance_score=scoring.relevance_score,
@@ -201,6 +250,24 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
                 combined_score=scoring.combined_score,
                 themes=context.themes,
             )
+        )
+
+        # Dashboard hook — keep person_signal_summary fresh within ~100 ms of
+        # scoring (design.md §5.2). Pick the best matched signal: Ring 1
+        # (keyword) wins over Ring 2 (semantic). `ring1_matches` is a list of
+        # signal-id strings; `ring2_matches` is a list of dicts with
+        # `signal_id`/`similarity`. `update_person_aggregation` no-ops when
+        # signal_id is None.
+        matched_signal_id = None
+        if ring1_matches:
+            matched_signal_id = UUID(ring1_matches[0])
+        elif ring2_matches:
+            matched_signal_id = UUID(ring2_matches[0]["signal_id"])
+        await run_dashboard_aggregation_hook(
+            db,
+            post_id=post_id,
+            signal_id=matched_signal_id,
+            combined_score=scoring.combined_score,
         )
 
         # Stage 10: Create alert
