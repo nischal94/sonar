@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sonar — TODO</title>
+<style>
+  :root {
+    --bg: #fafaf7;
+    --surface: #ffffff;
+    --surface-muted: #f4f3ee;
+    --ink: #1c1c1a;
+    --ink-soft: #56564f;
+    --ink-faint: #8a8a80;
+    --line: #e6e4dc;
+    --accent: #2b6cb0;
+    --ok: #2f7a4e;
+    --ok-bg: #e6f1ea;
+    --warn: #b37a00;
+    --warn-bg: #faf1dc;
+    --bad: #b3261e;
+    --bad-bg: #fbe5e4;
+    --info: #2b6cb0;
+    --info-bg: #e3ecf5;
+    --neutral: #56564f;
+    --neutral-bg: #eeede7;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #141412;
+      --surface: #1e1e1c;
+      --surface-muted: #252523;
+      --ink: #f4f3ee;
+      --ink-soft: #b5b4ac;
+      --ink-faint: #7a7a72;
+      --line: #2e2e2b;
+      --accent: #6fa8dc;
+      --ok: #7ac796;
+      --ok-bg: #1d2a22;
+      --warn: #dcb15c;
+      --warn-bg: #302715;
+      --bad: #e68b85;
+      --bad-bg: #2e1c1a;
+      --info: #88b4dc;
+      --info-bg: #1c2530;
+      --neutral: #b5b4ac;
+      --neutral-bg: #2a2a27;
+    }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); color: var(--ink); }
+  body {
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap {
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 48px 32px 96px;
+  }
+  .eyebrow {
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    margin: 0 0 8px;
+  }
+  h1 {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 0 0 8px;
+  }
+  .sub {
+    color: var(--ink-soft);
+    margin: 0 0 32px;
+    font-size: 15px;
+  }
+  h2 {
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    margin: 48px 0 16px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--line);
+  }
+  h3 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 0 0 6px;
+    letter-spacing: -0.01em;
+  }
+  p { margin: 0 0 12px; color: var(--ink-soft); }
+  p.tight { margin: 0; }
+  code, kbd {
+    font-family: var(--mono);
+    font-size: 0.88em;
+    background: var(--surface-muted);
+    color: var(--ink);
+    padding: 1px 6px;
+    border-radius: 4px;
+    border: 1px solid var(--line);
+  }
+  a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; }
+  a:hover { border-bottom-color: var(--accent); }
+
+  /* Top stats bar */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin: 0 0 32px;
+  }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .stat-label {
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    margin: 0 0 4px;
+  }
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 15px;
+    color: var(--ink);
+    font-weight: 600;
+  }
+  .stat-value.ok { color: var(--ok); }
+
+  /* Hero card — the "do this next" block */
+  .hero {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-left: 4px solid var(--accent);
+    border-radius: 10px;
+    padding: 24px 28px;
+    margin: 0 0 16px;
+  }
+  .hero h3 { margin-bottom: 10px; }
+  .hero p { color: var(--ink-soft); }
+  .hero-meta {
+    display: flex;
+    gap: 16px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--ink-faint);
+  }
+
+  /* Phase table */
+  .phase-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .phase-table th {
+    text-align: left;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+    background: var(--surface-muted);
+  }
+  .phase-table td {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  .phase-table tr:last-child td { border-bottom: none; }
+  .phase-table .slice {
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .phase-table .desc {
+    color: var(--ink-soft);
+    font-size: 14px;
+  }
+  .progress {
+    display: flex;
+    gap: 4px;
+    margin: 0 0 16px;
+  }
+  .progress-cell {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--neutral-bg);
+  }
+  .progress-cell.done { background: var(--ok); }
+
+  /* Pills / badges */
+  .pill {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    padding: 2px 8px;
+    border-radius: 10px;
+    white-space: nowrap;
+    font-family: var(--sans);
+  }
+  .pill.ok   { background: var(--ok-bg);   color: var(--ok); }
+  .pill.warn { background: var(--warn-bg); color: var(--warn); }
+  .pill.bad  { background: var(--bad-bg);  color: var(--bad); }
+  .pill.info { background: var(--info-bg); color: var(--info); }
+  .pill.neutral { background: var(--neutral-bg); color: var(--neutral); }
+
+  /* Priority cards */
+  .priority-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px 20px;
+  }
+  .card-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+  .card-letter {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: var(--surface-muted);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink-soft);
+  }
+  .card-title { font-weight: 600; font-size: 16px; flex: 1; }
+  .card-meta {
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin-top: 8px;
+    font-family: var(--mono);
+  }
+  .card.recommended {
+    border-left: 3px solid var(--accent);
+  }
+
+  /* Issue table */
+  .issue-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+    font-size: 14px;
+  }
+  .issue-table th {
+    text-align: left;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 600;
+    padding: 10px 14px;
+    background: var(--surface-muted);
+    border-bottom: 1px solid var(--line);
+  }
+  .issue-table th.center, .issue-table td.center { text-align: center; }
+  .issue-table td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--line);
+    vertical-align: top;
+  }
+  .issue-table tr:last-child td { border-bottom: none; }
+  .issue-table tr.blocker td {
+    background: linear-gradient(90deg, var(--bad-bg) 0%, transparent 50%);
+  }
+  .issue-num {
+    font-family: var(--mono);
+    font-weight: 600;
+    color: var(--ink);
+    font-size: 13px;
+  }
+  .issue-title { color: var(--ink); }
+  .issue-note { color: var(--ink-faint); font-size: 12px; margin-top: 2px; }
+
+  /* Dogfood checklist */
+  .checklist {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px 24px;
+    counter-reset: step;
+  }
+  .step {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px dashed var(--line);
+  }
+  .step:last-child { border-bottom: none; padding-bottom: 0; }
+  .step:first-child { padding-top: 0; }
+  .step-num {
+    counter-increment: step;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: var(--surface-muted);
+    border: 1px solid var(--line);
+    border-radius: 50%;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--ink-soft);
+  }
+  .step-num::before { content: counter(step); }
+  .step-title { font-weight: 600; margin-bottom: 2px; }
+  .step-body { color: var(--ink-soft); font-size: 14px; }
+
+  /* Pre-launch gaps */
+  .gap-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--line);
+  }
+  .gap-row:last-child { border-bottom: none; }
+  .gap-title { font-weight: 600; font-size: 14px; }
+  .gap-note { color: var(--ink-faint); font-size: 12px; margin-top: 2px; }
+  .gap-list {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  /* Collapsible */
+  details {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 14px 20px;
+    margin-bottom: 12px;
+  }
+  details summary {
+    cursor: pointer;
+    font-weight: 600;
+    color: var(--ink);
+    list-style: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::before {
+    content: "›";
+    font-family: var(--mono);
+    color: var(--ink-faint);
+    transition: transform 0.15s;
+    display: inline-block;
+  }
+  details[open] summary::before { transform: rotate(90deg); }
+  details pre {
+    font-family: var(--mono);
+    font-size: 13px;
+    background: var(--surface-muted);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 12px 14px;
+    overflow-x: auto;
+    margin: 14px 0 4px;
+    color: var(--ink);
+  }
+  details table { margin-top: 12px; font-size: 13px; width: 100%; border-collapse: collapse; }
+  details table th, details table td {
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--line);
+  }
+  details table th { color: var(--ink-faint); font-weight: 600; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+  /* Footer */
+  .foot {
+    margin-top: 64px;
+    padding-top: 24px;
+    border-top: 1px solid var(--line);
+    color: var(--ink-faint);
+    font-size: 12px;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  @media (max-width: 640px) {
+    .wrap { padding: 24px 16px 64px; }
+    .stats { grid-template-columns: 1fr 1fr; }
+    h1 { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <p class="eyebrow">Sonar · Project TODO</p>
+  <h1>Paused to dogfood.</h1>
+  <p class="sub">Phase 2 is 4 of 5 slices done. The full day-one loop works. Before shipping Discovery, use the product for 3–5 days and let the issue list write itself.</p>
+
+  <section class="stats">
+    <div class="stat">
+      <p class="stat-label">Main HEAD</p>
+      <p class="stat-value">c305e0b</p>
+    </div>
+    <div class="stat">
+      <p class="stat-label">Latest tag</p>
+      <p class="stat-value">v0.6.0</p>
+    </div>
+    <div class="stat">
+      <p class="stat-label">Tests</p>
+      <p class="stat-value ok">113 / 113</p>
+    </div>
+    <div class="stat">
+      <p class="stat-label">CI</p>
+      <p class="stat-value ok">Green</p>
+    </div>
+  </section>
+
+  <!-- HERO: next action -->
+  <section class="hero">
+    <span class="pill info">Next action</span>
+    <h3 style="margin-top:10px">Dogfood the shipped surface</h3>
+    <p>Install the extension on your real LinkedIn account, complete the Wizard on yourself, run one real Backfill, and live with the dashboard for 3–5 days. File a GitHub issue per real bug. Then triage and ship Discovery.</p>
+    <p class="tight" style="margin-top:10px">Full checklist:
+      <a href="docs/session-notes/2026-04-18-session-6.md">docs/session-notes/2026-04-18-session-6.md</a> (bottom of the file)
+    </p>
+    <div class="hero-meta">
+      <span>🔒 One blocker: <a href="https://github.com/nischal94/sonar/issues/76">#76 Apify actor research</a></span>
+      <span>💰 ~$0.40 / Backfill run</span>
+    </div>
+  </section>
+
+  <!-- PHASE STATUS -->
+  <h2>Phase status</h2>
+
+  <div class="progress" title="Phase 2: 4 of 5 slices shipped">
+    <div class="progress-cell done" title="Foundation ✓"></div>
+    <div class="progress-cell done" title="Wizard ✓"></div>
+    <div class="progress-cell done" title="Dashboard ✓"></div>
+    <div class="progress-cell done" title="Backfill ✓"></div>
+    <div class="progress-cell" title="Discovery — not started"></div>
+  </div>
+
+  <table class="phase-table">
+    <thead>
+      <tr><th>Slice</th><th>Status</th><th>What it is</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="slice">Foundation</td>
+        <td><span class="pill ok">Shipped</span></td>
+        <td class="desc">Migration 002, 4 new ORM models, Ring 1/2 matchers, pipeline refactor, scorer keyword bonus. <code>PR #10</code></td>
+      </tr>
+      <tr>
+        <td class="slice">Wizard</td>
+        <td><span class="pill ok">Shipped</span></td>
+        <td class="desc">5-step Signal Configuration Wizard at <code>/signals/setup</code>. <code>propose</code> + <code>confirm</code> endpoints, <code>signal_proposal_events</code> telemetry, idempotency + role-separation defense. <code>PR #64 #68 #70</code></td>
+      </tr>
+      <tr>
+        <td class="slice">Dashboard</td>
+        <td><span class="pill ok">Shipped</span></td>
+        <td class="desc">Ranked People List at <code>/dashboard</code>. Incremental trending keeps <code>person_signal_summary</code> fresh within ~100 ms/post. 30s polling + tab-visibility pause. <code>PR #73</code></td>
+      </tr>
+      <tr>
+        <td class="slice">Backfill</td>
+        <td><span class="pill ok">Shipped</span></td>
+        <td class="desc">Day-One Backfill — extension captures connections, 1st-degree Apify scrape (200 × 60 days, ~$0.40/ws), completion email, dashboard banner polls at 5s. 2nd-degree deferred. <code>PR #77</code></td>
+      </tr>
+      <tr>
+        <td class="slice">Discovery</td>
+        <td><span class="pill neutral">Not started</span></td>
+        <td class="desc">Ring 3 nightly HDBSCAN clustering for emerging topics + Weekly Digest Email. Most experimental — best built last when real data exists. Needs <code>superpowers:brainstorming</code> first.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- NEXT STEPS -->
+  <h2>Next steps</h2>
+  <div class="priority-grid">
+
+    <div class="card recommended">
+      <div class="card-head">
+        <span class="card-letter">A</span>
+        <span class="card-title">Dogfood the current state</span>
+        <span class="pill info">Recommended</span>
+      </div>
+      <p class="tight">Use the product for 3–5 days on your real LinkedIn. Triage findings into GitHub issues; fix blockers inline; then ship Discovery.</p>
+      <p class="card-meta">Effort: 3–5 days lived-in use + one focused triage session</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-letter">B</span>
+        <span class="card-title">Phase 2 Discovery slice</span>
+        <span class="pill neutral">After dogfood</span>
+      </div>
+      <p class="tight">Ring 3 nightly HDBSCAN clustering + Weekly Digest Email. Should follow dogfood so clustering is validated against real data, not synthetic posts.</p>
+      <p class="card-meta">How: superpowers:brainstorming on design.md §4.4 · Effort: multi-session</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-letter">C</span>
+        <span class="card-title">Pre-launch gaps</span>
+        <span class="pill warn">Before prod</span>
+      </div>
+      <p class="tight">PII/GDPR, observability, LLM eval datasets. Should be promoted into the numbered priority list before Discovery expands the surface area.</p>
+      <p class="card-meta">See the Pre-launch gaps table below</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-letter">D</span>
+        <span class="card-title">Frontend dep bumps (5 coupled)</span>
+        <span class="pill warn">Requires human in browser</span>
+      </div>
+      <p class="tight">React 18→19, react-dom, react-router-dom 6→7, Vite 6→8, @vitejs/plugin-react 4→6. Evaluate as ONE coordinated upgrade — <code>npm run build</code> passing is not sufficient.</p>
+      <p class="card-meta">Tracked: issue #40 · Effort: half-day to full day</p>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <span class="card-letter">E</span>
+        <span class="card-title">Phase 3 brainstorming</span>
+        <span class="pill neutral">After Phase 2</span>
+      </div>
+      <p class="tight">Real-time alerts, CRM integrations, team features — three rough directions in CLAUDE.md. <code>superpowers:brainstorming</code> session to produce <code>docs/phase-3/design.md</code>.</p>
+    </div>
+
+  </div>
+
+  <!-- PRE-LAUNCH GAPS -->
+  <h2>Pre-launch gaps</h2>
+  <div class="gap-list">
+    <div class="gap-row">
+      <div>
+        <div class="gap-title">Rate limiting</div>
+        <div class="gap-note"><code>/auth/token</code> (PR #61) + <code>/workspace/register</code> (PR #67). Deploy precondition <code>--proxy-headers</code> tracked in #62</div>
+      </div>
+      <span class="pill ok">Shipped</span>
+    </div>
+    <div class="gap-row">
+      <div>
+        <div class="gap-title">PII / GDPR</div>
+        <div class="gap-note">Data retention policy + export + deletion endpoints</div>
+      </div>
+      <span class="pill bad">Not started</span>
+    </div>
+    <div class="gap-row">
+      <div>
+        <div class="gap-title">Observability baseline</div>
+        <div class="gap-note">structlog w/ request-ID + Sentry + Prometheus + split <code>/health/live</code> vs <code>/ready</code> + DB backup/restore drill</div>
+      </div>
+      <span class="pill bad">Not started</span>
+    </div>
+    <div class="gap-row">
+      <div>
+        <div class="gap-title">LLM eval datasets</div>
+        <div class="gap-note">Harness in spirit via structural CI gate. Activates once <code>signal_proposal_events</code> has ~100+ real completions</div>
+      </div>
+      <span class="pill warn">In spirit</span>
+    </div>
+  </div>
+
+  <!-- OPEN ISSUES -->
+  <h2>Open issues</h2>
+  <table class="issue-table">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Title</th>
+        <th class="center">Blocks dogfood</th>
+        <th class="center">Blocks prod</th>
+        <th>Do when</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="blocker">
+        <td class="issue-num"><a href="https://github.com/nischal94/sonar/issues/76">#76</a></td>
+        <td>
+          <div class="issue-title">Backfill research spikes</div>
+          <div class="issue-note">Apify 1st-degree actor verification + 2nd-degree ICP-filtered availability. Placeholder actor ID ships today.</div>
+        </td>
+        <td class="center"><span class="pill bad">Yes</span></td>
+        <td class="center"><span class="pill bad">Yes</span></td>
+        <td>Before dogfood step 4</td>
+      </tr>
+      <tr>
+        <td class="issue-num"><a href="https://github.com/nischal94/sonar/issues/74">#74</a></td>
+        <td>
+          <div class="issue-title">Dashboard P2/P3 polish nits</div>
+          <div class="issue-note">From PR #73 review feedback</div>
+        </td>
+        <td class="center"><span class="pill neutral">No</span></td>
+        <td class="center"><span class="pill neutral">No</span></td>
+        <td>Next time editing dashboard files</td>
+      </tr>
+      <tr>
+        <td class="issue-num"><a href="https://github.com/nischal94/sonar/issues/69">#69</a></td>
+        <td>
+          <div class="issue-title">Wizard <code>/confirm</code> robustness nits</div>
+          <div class="issue-note">From PR #68 review feedback</div>
+        </td>
+        <td class="center"><span class="pill neutral">No</span></td>
+        <td class="center"><span class="pill neutral">No</span></td>
+        <td>Next time editing wizard files</td>
+      </tr>
+      <tr>
+        <td class="issue-num"><a href="https://github.com/nischal94/sonar/issues/65">#65</a></td>
+        <td>
+          <div class="issue-title">E2E: re-activate register/login Playwright tests</div>
+          <div class="issue-note">Skipped in PR #64 during testing-ladder setup</div>
+        </td>
+        <td class="center"><span class="pill neutral">No</span></td>
+        <td class="center"><span class="pill warn">Nice-to-have</span></td>
+        <td>When someone's in CI/test infra</td>
+      </tr>
+      <tr>
+        <td class="issue-num"><a href="https://github.com/nischal94/sonar/issues/62">#62</a></td>
+        <td>
+          <div class="issue-title">uvicorn <code>--proxy-headers</code> deploy precondition</div>
+          <div class="issue-note">Required before rate limiting is trustworthy in prod</div>
+        </td>
+        <td class="center"><span class="pill neutral">No</span></td>
+        <td class="center"><span class="pill bad">Yes</span></td>
+        <td>Pre-launch sprint</td>
+      </tr>
+      <tr>
+        <td class="issue-num"><a href="https://github.com/nischal94/sonar/issues/43">#43</a></td>
+        <td>
+          <div class="issue-title">redis 7 bump</div>
+          <div class="issue-note">Blocked upstream — celery+kombu cap redis &lt; 5.3</div>
+        </td>
+        <td class="center"><span class="pill neutral">No</span></td>
+        <td class="center"><span class="pill neutral">No</span></td>
+        <td>When upstream unblocks (can't fix locally)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <!-- DOGFOOD CHECKLIST -->
+  <h2>Dogfood checklist</h2>
+  <p>Order matters — if step 2 fails, step 4 is a waste of Apify budget.</p>
+  <div class="checklist">
+    <div class="step">
+      <span class="step-num"></span>
+      <div>
+        <div class="step-title">Swap <code>.env</code> placeholders for real keys</div>
+        <div class="step-body"><code>OPENAI_API_KEY</code>, <code>GROQ_API_KEY</code>, <code>APIFY_API_TOKEN</code>, <code>SENDGRID_API_KEY</code>, <code>SENDGRID_FROM_EMAIL</code>. Leave Twilio/Telegram as placeholders — Wizard/Dashboard/Backfill don't touch them.</div>
+      </div>
+    </div>
+    <div class="step">
+      <span class="step-num"></span>
+      <div>
+        <div class="step-title">Run the Wizard on yourself</div>
+        <div class="step-body">Enter your real capability profile. Watch what keywords the LLM proposes — too broad? too narrow? This feedback loop is more valuable than any synthetic test. Bump <code>PROMPT_VERSION</code> on every content change.</div>
+      </div>
+    </div>
+    <div class="step">
+      <span class="step-num"></span>
+      <div>
+        <div class="step-title">Install <code>extension/</code> as unpacked in Chrome</div>
+        <div class="step-body">Let it observe your real LinkedIn feed for a few hours. Does the content script's DOM selector survive LinkedIn's actual markup? Does <code>capture-connections.js</code> scroll the virtualized list correctly? These have never run against live LinkedIn.</div>
+      </div>
+    </div>
+    <div class="step">
+      <span class="step-num"></span>
+      <div>
+        <div class="step-title">Click "Run day-one scan"</div>
+        <div class="step-body">~$0.40 of real Apify money. Does it return posts? Do they match <code>ApifyProfilePost</code>? If either fails, pause and do <a href="https://github.com/nischal94/sonar/issues/76">#76</a> — update <code>RealApifyService._ACTOR_ID</code> to a verified actor.</div>
+      </div>
+    </div>
+    <div class="step">
+      <span class="step-num"></span>
+      <div>
+        <div class="step-title">Live with the dashboard for 3–5 days</div>
+        <div class="step-body">Is 0.65 the right default threshold? Are matching-signal-phrase summaries useful or LLM slop? Is 30s polling noisy? Is the "Draft outreach" button begging to be wired up?</div>
+      </div>
+    </div>
+  </div>
+  <p style="margin-top:12px; color: var(--ink-faint); font-size: 13px;">
+    <strong>Definition of done:</strong> one GitHub issue per real bug, plus a gut-check answer to <em>"if this were a stranger's product, would I use it for a second day?"</em> Yes → ship Discovery. No → the issue list tells you what to fix first.
+  </p>
+
+  <!-- COLLAPSIBLES -->
+  <h2>Reference</h2>
+
+  <details>
+    <summary>How to resume in a new Claude Code session</summary>
+    <pre>cd ~/Downloads/Misc/projects/sonar
+docker compose up -d postgres redis api
+docker compose exec -T api alembic upgrade head
+docker compose exec -T api pytest -q       # expect 113 passing + 4 skipped
+
+claude    # launch from inside the Sonar dir so per-project memory loads</pre>
+    <p style="margin-top:10px; color: var(--ink-soft);">Then ask Claude: <em>"Read TODO.md and the latest <code>docs/session-notes/</code> entry, then tell me the state."</em></p>
+  </details>
+
+  <details>
+    <summary>First-time setup (.env keys)</summary>
+    <table>
+      <thead><tr><th>Key</th><th>Where</th><th>Required</th></tr></thead>
+      <tbody>
+        <tr><td><code>SECRET_KEY</code></td><td>Any random 32+ char string</td><td>✅</td></tr>
+        <tr><td><code>OPENAI_API_KEY</code></td><td>platform.openai.com</td><td>✅ (embeddings + gpt-5.4-mini)</td></tr>
+        <tr><td><code>GROQ_API_KEY</code></td><td>console.groq.com (free)</td><td>✅ (Llama for med/low alerts)</td></tr>
+        <tr><td><code>APIFY_API_TOKEN</code></td><td>apify.com</td><td>✅ (Backfill slice)</td></tr>
+        <tr><td><code>SENDGRID_API_KEY</code> / <code>FROM_EMAIL</code></td><td>sendgrid.com</td><td>✅ (Wizard + Backfill emails)</td></tr>
+        <tr><td><code>TWILIO_ACCOUNT_SID</code> / <code>AUTH_TOKEN</code></td><td>twilio.com</td><td>— (WhatsApp only)</td></tr>
+        <tr><td><code>TELEGRAM_BOT_TOKEN</code></td><td>@BotFather</td><td>— (Telegram only)</td></tr>
+      </tbody>
+    </table>
+    <pre style="margin-top:12px">docker compose up -d --build
+docker compose exec -T api alembic upgrade head
+# open http://localhost:5173</pre>
+  </details>
+
+  <details>
+    <summary>Orthogonal cleanup (not blocking)</summary>
+    <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
+      <li><strong>Residual Node 20 on <code>googleapis/release-please-action@v4</code></strong> — deprecation annotation fires on every release-please run. Waiting on googleapis. Deadline: Node 24 forced 2026-06-02, Node 20 removed 2026-09-16. Revisit May 2026.</li>
+      <li><strong>Type checking</strong> — mypy/pyright in CI starts permissive, tightens over time. Basic setup shipped; tightening remains.</li>
+      <li><strong>Memory key path migration</strong> — per-project memory still keyed at the old <code>project-ideas/sonar</code> path. Consider symlinking or renaming the memory key to the new slug.</li>
+    </ul>
+  </details>
+
+  <div class="foot">
+    <span>Last updated · session 6 · 2026-04-18</span>
+    <span>Source: <a href="TODO.md">TODO.md</a> · <a href="docs/session-notes/2026-04-18-session-6.md">session note</a></span>
+  </div>
+
+</div>
+</body>
+</html>
