@@ -2,6 +2,19 @@
 
 All notable changes to Sonar are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
+## [0.5.0](https://github.com/nischal94/sonar/compare/v0.4.0...v0.5.0) (2026-04-18)
+
+
+### Added
+
+* **dashboard:** Phase 2 Dashboard — Ranked People List MVP (Tasks 1-11) ([#73](https://github.com/nischal94/sonar/issues/73)) ([80491b2](https://github.com/nischal94/sonar/commit/80491b208f5fc4d82f3e7808fc9a92072f193ea6))
+
+
+### Documentation
+
+* **phase-2:** dashboard implementation decisions (brainstorm output) ([79005b3](https://github.com/nischal94/sonar/commit/79005b3ae9b90dd437516c8d5ee3acc3844f6e8e))
+* **phase-2:** dashboard implementation plan (11 tasks) ([1cdc8db](https://github.com/nischal94/sonar/commit/1cdc8db260f400fb10cf5c2f395e1aaff888b218))
+
 ## [0.4.0](https://github.com/nischal94/sonar/compare/v0.3.0...v0.4.0) (2026-04-17)
 
 
