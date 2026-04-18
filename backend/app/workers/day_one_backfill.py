@@ -52,6 +52,10 @@ async def run_day_one_backfill(
     if ws.backfill_completed_at is not None:
         raise ValueError(f"workspace {workspace_id} already backfilled")
 
+    # Safe to touch `ws` attributes across commits: the session factory uses
+    # expire_on_commit=False (see app/database.py), so the instance does not
+    # expire after commit and no lazy reload is triggered inside the
+    # exception handler below.
     ws.backfill_started_at = datetime.now(timezone.utc)
     ws.backfill_failed_at = None
     await db.commit()
@@ -77,13 +81,24 @@ async def run_day_one_backfill(
         posts = await apify.scrape_profile_posts(
             profile_urls=profile_urls, days=DAYS_BACK
         )
-    except Exception as exc:
-        ws.backfill_failed_at = datetime.now(timezone.utc)
-        await db.commit()
+    except Exception as apify_exc:
+        # Persist the failure marker so the status endpoint can surface it.
+        # Guard against a commit failure here masking the original Apify
+        # exception — we always re-raise the Apify error, not the DB error.
+        try:
+            ws.backfill_failed_at = datetime.now(timezone.utc)
+            await db.commit()
+        except Exception as commit_exc:
+            logger.error(
+                "[backfill] failed to persist backfill_failed_at for workspace %s: %s",
+                workspace_id,
+                commit_exc,
+                exc_info=True,
+            )
         logger.error(
-            "[backfill] apify scrape failed for workspace %s: %s",
+            "[backfill] apify scrape failed for workspace %s",
             workspace_id,
-            exc,
+            exc_info=apify_exc,
         )
         raise
 

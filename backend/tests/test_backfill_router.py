@@ -50,7 +50,7 @@ async def test_connections_bulk_upserts_rows(client, db_session):
         headers=hdrs,
     )
     assert resp.status_code == 200
-    assert resp.json() == {"upserted": 2}
+    assert resp.json() == {"upserted": 2, "received": 2, "deduped": 0}
 
     rows = (
         (
@@ -113,6 +113,63 @@ async def test_connections_bulk_dedupes_on_linkedin_id(client, db_session):
     assert len(rows) == 1
     assert rows[0].name == "New"
     assert rows[0].company == "NewCo"
+
+
+@pytest.mark.asyncio
+async def test_connections_bulk_dedupes_within_single_request(client, db_session):
+    # LinkedIn's virtualized connections list re-emits rows when the extension
+    # re-scrolls past an already-captured row. The endpoint must collapse
+    # same-request dups on linkedin_id (last-wins), not IntegrityError.
+    ws, user = await _seed_workspace(db_session, "bd@b.com")
+    hdrs = {"Authorization": f"Bearer {_tok(user.id, ws.id)}"}
+
+    resp = await client.post(
+        "/extension/connections/bulk",
+        json={
+            "connections": [
+                {
+                    "linkedin_id": "li-same",
+                    "name": "First Pass",
+                    "headline": None,
+                    "company": "OldCo",
+                    "profile_url": "https://linkedin.com/in/same",
+                },
+                {
+                    "linkedin_id": "li-same",
+                    "name": "Second Pass",
+                    "headline": "Updated",
+                    "company": "NewCo",
+                    "profile_url": "https://linkedin.com/in/same",
+                },
+                {
+                    "linkedin_id": "li-other",
+                    "name": "Other",
+                    "headline": None,
+                    "company": None,
+                    "profile_url": "https://linkedin.com/in/other",
+                },
+            ]
+        },
+        headers=hdrs,
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body == {"upserted": 2, "received": 3, "deduped": 1}
+
+    rows = (
+        (
+            await db_session.execute(
+                select(Connection).where(Connection.workspace_id == ws.id)
+            )
+        )
+        .scalars()
+        .all()
+    )
+    by_lid = {r.linkedin_id: r for r in rows}
+    assert len(by_lid) == 2
+    # Last occurrence wins for the duplicated linkedin_id
+    assert by_lid["li-same"].name == "Second Pass"
+    assert by_lid["li-same"].company == "NewCo"
 
 
 @pytest.mark.asyncio

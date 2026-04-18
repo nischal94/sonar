@@ -17,7 +17,9 @@ class ConnectionsBulkRequest(BaseModel):
 
 
 class ConnectionsBulkResponse(BaseModel):
-    upserted: int
+    upserted: int  # count of unique rows written/updated (post-dedupe)
+    received: int = 0  # count of rows the client sent in the request body
+    deduped: int = 0  # received - upserted; 0 when the client sent no dups
 
 
 class BackfillTriggerResponse(BaseModel):

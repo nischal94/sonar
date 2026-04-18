@@ -12,6 +12,7 @@ from app.routers.auth import get_current_user
 from app.schemas.backfill import (
     BackfillStatusResponse,
     BackfillTriggerResponse,
+    BulkConnection,
     ConnectionsBulkRequest,
     ConnectionsBulkResponse,
 )
@@ -27,18 +28,19 @@ async def connections_bulk(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    received = len(body.connections)
     if not body.connections:
-        return ConnectionsBulkResponse(upserted=0)
+        return ConnectionsBulkResponse(upserted=0, received=0, deduped=0)
 
     # Dedupe by linkedin_id within the request body — LinkedIn's virtualized
     # list can emit duplicates when the extension scrolls re-renders over the
     # same row. Last occurrence wins so the freshest scrape payload sticks.
-    deduped: dict[str, object] = {}
+    deduped_map: dict[str, BulkConnection] = {}
     for row in body.connections:
-        deduped[row.linkedin_id] = row
-    rows = list(deduped.values())
+        deduped_map[row.linkedin_id] = row
+    rows = list(deduped_map.values())
 
-    linkedin_ids = list(deduped.keys())
+    linkedin_ids = list(deduped_map.keys())
     existing = (
         (
             await db.execute(
@@ -75,7 +77,11 @@ async def connections_bulk(
             )
 
     await db.commit()
-    return ConnectionsBulkResponse(upserted=len(rows))
+    return ConnectionsBulkResponse(
+        upserted=len(rows),
+        received=received,
+        deduped=received - len(rows),
+    )
 
 
 @router.post("/workspace/backfill/trigger", response_model=BackfillTriggerResponse)
