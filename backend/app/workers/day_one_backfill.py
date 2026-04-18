@@ -29,6 +29,7 @@ async def run_day_one_backfill(
     *,
     workspace_id: UUID,
     apify: ApifyService,
+    email=None,  # Optional — inject FakeEmailSender in tests
 ) -> int:
     """Run backfill for one workspace. Returns the number of profiles scraped.
 
@@ -94,4 +95,16 @@ async def run_day_one_backfill(
     ws.backfill_completed_at = datetime.now(timezone.utc)
     ws.backfill_profile_count = len(profile_urls)
     await db.flush()
+
+    # Fire-and-forget completion email. Email failures do NOT fail the task.
+    if email is not None:
+        try:
+            await email.send_backfill_complete(ws, len(profile_urls))
+        except Exception as exc:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "[backfill] completion email failed, continuing: %s", exc
+            )
+
     return len(profile_urls)

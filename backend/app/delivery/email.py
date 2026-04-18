@@ -14,7 +14,9 @@ class EmailSender:
         if not to_email:
             return
 
-        priority_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(alert.priority, "⚪")
+        priority_emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(
+            alert.priority, "⚪"
+        )
         subject = f"{priority_emoji} Sonar Signal — {alert.opportunity_type.replace('_', ' ').title()}"
 
         html = f"""
@@ -31,6 +33,34 @@ class EmailSender:
             Timing: {alert.timing_score:.0%} |
             Combined: {alert.combined_score:.0%}
         </p>
+        """
+
+        message = Mail(
+            from_email=get_settings().sendgrid_from_email,
+            to_emails=to_email,
+            subject=subject,
+            html_content=html,
+        )
+        await asyncio.to_thread(self._client.send, message)
+
+    async def send_backfill_complete(self, workspace, profile_count: int) -> None:
+        """One-time onboarding email sent when Day-One Backfill finishes."""
+        config = (
+            workspace.delivery_channels.get("email", {})
+            if workspace.delivery_channels
+            else {}
+        )
+        to_email = config.get("address")
+        if not to_email:
+            return
+
+        subject = "Your Sonar dashboard is ready"
+        html = f"""
+        <h2>Your Sonar dashboard is ready</h2>
+        <p>We've finished scanning <strong>{profile_count}</strong> people in your network for buying-intent signals over the past 60 days.</p>
+        <p>Open your dashboard to see who's showing intent right now:</p>
+        <p><a href="http://localhost:5173/dashboard">Open Sonar Dashboard</a></p>
+        <p>Going forward, new signals flow into your dashboard automatically as the extension observes your LinkedIn feed.</p>
         """
 
         message = Mail(
