@@ -10,6 +10,7 @@ from app.routers.ingest import router as ingest_router
 from app.routers.alerts import router as alerts_router
 from app.routers.signals import router as signals_router
 from app.routers.dashboard import router as dashboard_router
+from app.routers.backfill import router as backfill_router
 
 app = FastAPI(title="Sonar API", version="1.0.0")
 
@@ -45,6 +46,7 @@ app.include_router(ingest_router)
 app.include_router(alerts_router)
 app.include_router(signals_router)
 app.include_router(dashboard_router)
+app.include_router(backfill_router)
 
 
 @app.get("/health")
