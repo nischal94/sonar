@@ -4,6 +4,7 @@ from app.config import get_settings
 from app.services.apify import (
     ApifyService,
     ApifyProfilePost,
+    RealApifyService,
     get_apify_service,
 )
 
@@ -62,3 +63,65 @@ async def test_fake_apify_returns_expected_shape():
 def test_get_apify_service_is_callable():
     svc = get_apify_service()
     assert isinstance(svc, ApifyService)
+
+
+# --- RealApifyService._map_row: harvestapi output → ApifyProfilePost ---
+
+
+def _ok_row(**overrides):
+    row = {
+        "id": "urn:li:activity:7000000000000000001",
+        "content": "Hiring two senior engineers, DMs open.",
+        "postedAt": {"timestamp": 1713440000000},  # ms since epoch
+        "author": {
+            "linkedinUrl": "https://www.linkedin.com/in/alice",
+        },
+        "engagement": {"likes": 42, "comments": 3, "shares": 1},
+    }
+    row.update(overrides)
+    return row
+
+
+def test_map_row_happy_path():
+    post = RealApifyService._map_row(_ok_row())
+    assert post is not None
+    assert post.profile_url == "https://www.linkedin.com/in/alice"
+    assert post.linkedin_post_id == "urn:li:activity:7000000000000000001"
+    assert post.content.startswith("Hiring")
+    assert post.posted_at.tzinfo is not None  # timezone-aware
+    assert (post.reaction_count, post.comment_count, post.share_count) == (42, 3, 1)
+
+
+def test_map_row_accepts_iso_timestamp_string():
+    # Some actor versions return an ISO string rather than a ms-epoch int.
+    post = RealApifyService._map_row(_ok_row(postedAt="2026-04-10T14:22:00+00:00"))
+    assert post is not None
+    assert post.posted_at == datetime(2026, 4, 10, 14, 22, tzinfo=timezone.utc)
+
+
+def test_map_row_falls_back_to_profileurl_field_name():
+    # Older harvestapi schema used `profileUrl` instead of `linkedinUrl`.
+    row = _ok_row()
+    row["author"] = {"profileUrl": "https://www.linkedin.com/in/bob"}
+    post = RealApifyService._map_row(row)
+    assert post is not None
+    assert post.profile_url == "https://www.linkedin.com/in/bob"
+
+
+def test_map_row_returns_none_on_missing_required_field():
+    # No id → skip row, don't crash the batch.
+    assert RealApifyService._map_row(_ok_row(id=None)) is None
+    # No profile url → skip.
+    row = _ok_row()
+    row["author"] = {}
+    assert RealApifyService._map_row(row) is None
+    # No posted_at → skip.
+    assert RealApifyService._map_row(_ok_row(postedAt=None)) is None
+
+
+def test_map_row_defaults_missing_engagement_to_zero():
+    row = _ok_row()
+    row.pop("engagement")
+    post = RealApifyService._map_row(row)
+    assert post is not None
+    assert (post.reaction_count, post.comment_count, post.share_count) == (0, 0, 0)

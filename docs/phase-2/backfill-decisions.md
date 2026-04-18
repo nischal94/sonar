@@ -86,10 +86,18 @@ The hypothesis Backfill needs to validate is *"does a populated day-one dashboar
 
 - Max 200 connections per workspace (most-recently-active per LinkedIn's default connection-page ordering)
 - 60-day post-history window
-- Expected cost per workspace: ~$0.40 via Apify
+- `MAX_POSTS_PER_PROFILE = 10` (see `backend/app/services/apify.py`)
+- Expected cost per workspace: **$0.75–$1.50 typical, $3.00 ceiling** via `harvestapi/linkedin-profile-posts` @ $1.50/1k posts (see `backfill-apify-research.md` §2)
+
+**Note on the original $0.40 estimate.** Locked before the actor research
+spike ran; revised upward after the spike confirmed no-cookies LinkedIn
+actors land in the $1.00–$1.50 / 1k-posts band, not the ~$0.80 the old
+estimate assumed. 10-30 dogfood runs during build = $15–$90 rather than
+$5–$15. Still tolerable. If it gets tight, drop `MAX_POSTS_PER_PROFILE` to
+5 or the connection cap to 100 — both are single-line code changes.
 
 **Why 200/60 and not the spec's 500/90 (Option A):**
-Pre-launch Sonar expects 10-30 dogfood backfills during the build phase (broken actors, bad fixtures, debugging). At the spec's $2 cap, that's $20-60 burned before shipping — tolerable but tighter budget means more iteration freedom. 200 connections is sufficient signal to test the day-one-dashboard hypothesis. Raising the cap later is a code change, not an architectural one.
+200 connections is sufficient signal to test the day-one-dashboard hypothesis. Raising the cap later is a code change, not an architectural one.
 
 **Rate limits (via existing slowapi):**
 

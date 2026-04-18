@@ -4,11 +4,13 @@ First external HTTP integration since SendGrid/Groq. Follows the Depends()-
 injectable pattern (per sonar/CLAUDE.md Python test mocking rules) so tests
 never touch real Apify.
 
-Actor selection + pricing documented in docs/phase-2/backfill-apify-research.md.
+Actor selection, pricing, and schema mapping documented in
+docs/phase-2/backfill-apify-research.md. MVP pick: harvestapi/linkedin-
+profile-posts (no cookies, $1.50/1k posts, clean postedLimitDate filter).
 """
 
 from __future__ import annotations
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Protocol
 
 import httpx
@@ -16,9 +18,19 @@ from pydantic import BaseModel
 
 from app.config import get_settings
 
+# Per-profile post cap. See docs/phase-2/backfill-apify-research.md §2 for
+# the cost math: at 10 posts × 200 profiles × $1.50/1k, the worst-case run
+# caps at ~$3 per workspace; realistic runs land at $0.75–$1.50.
+MAX_POSTS_PER_PROFILE = 10
+
 
 class ApifyProfilePost(BaseModel):
-    """Normalized representation of one post returned by Apify."""
+    """Normalized representation of one post returned by Apify.
+
+    Keep this shape stable across actor swaps — the worker and tests depend
+    on it. The raw-field mapping in RealApifyService.scrape_profile_posts
+    is what changes when we pick a new actor.
+    """
 
     profile_url: str
     linkedin_post_id: str
@@ -38,12 +50,12 @@ class ApifyService(Protocol):
 class RealApifyService:
     """Production implementation. Calls the configured Apify actor via HTTPS.
 
-    The specific actor id and input-schema mapping live in
-    docs/phase-2/backfill-apify-research.md. Update this class when the
-    MVP pick changes.
+    See docs/phase-2/backfill-apify-research.md for actor selection rationale
+    and the raw-field mapping table. Swap actors by updating _ACTOR_ID + the
+    field-access lines in scrape_profile_posts; do NOT change ApifyProfilePost.
     """
 
-    _ACTOR_ID = "apify/linkedin-profile-scraper"  # verify in research spike
+    _ACTOR_ID = "harvestapi~linkedin-profile-posts"
     _RUN_TIMEOUT_SEC = 600
 
     def __init__(self) -> None:
@@ -59,39 +71,76 @@ class RealApifyService:
     async def scrape_profile_posts(
         self, profile_urls: list[str], days: int
     ) -> list[ApifyProfilePost]:
+        # harvestapi uses `postedLimitDate` (ISO string), not `daysBack`.
+        posted_limit = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
         run_url = (
             f"{self._base}/acts/{self._ACTOR_ID}/run-sync-get-dataset-items"
             f"?token={self._token}"
         )
         payload = {
-            "profileUrls": profile_urls,
-            "maxPostsPerProfile": 30,
-            "daysBack": days,
+            "targetUrls": profile_urls,
+            "maxPosts": MAX_POSTS_PER_PROFILE,
+            "postedLimitDate": posted_limit,
+            "scrapeReactions": False,
+            "scrapeComments": False,
+            "includeQuotePosts": True,
+            "includeReposts": False,
         }
         async with httpx.AsyncClient(timeout=self._RUN_TIMEOUT_SEC) as client:
             resp = await client.post(run_url, json=payload)
             resp.raise_for_status()
             raw = resp.json()
 
-        # Actor-specific field mapping. Adjust when swapping actors.
-        posts: list[ApifyProfilePost] = []
-        for item in raw:
-            try:
-                posts.append(
-                    ApifyProfilePost(
-                        profile_url=item["profileUrl"],
-                        linkedin_post_id=item["postId"],
-                        content=item.get("text", ""),
-                        posted_at=datetime.fromisoformat(item["postedAt"]),
-                        reaction_count=item.get("reactions", 0),
-                        comment_count=item.get("comments", 0),
-                        share_count=item.get("shares", 0),
-                    )
+        return [post for post in map(self._map_row, raw) if post is not None]
+
+    @staticmethod
+    def _map_row(item: dict) -> ApifyProfilePost | None:
+        """Map one harvestapi output row to our normalized shape.
+
+        Skip rows with missing required fields rather than raise — one
+        malformed row shouldn't kill the batch. See research doc §3 for the
+        mapping table.
+        """
+        try:
+            author = item.get("author") or {}
+            profile_url = author.get("linkedinUrl") or author.get("profileUrl")
+            post_id = item.get("id")
+
+            # postedAt may be a dict ({timestamp, date, relative}) OR a bare
+            # ISO string, depending on the actor's schema rev. Handle both.
+            posted_at_field = item.get("postedAt")
+            if isinstance(posted_at_field, dict):
+                posted_at_raw = posted_at_field.get("timestamp") or posted_at_field.get(
+                    "date"
                 )
-            except (KeyError, ValueError):
-                # Malformed row from Apify — skip, keep the batch useful.
-                continue
-        return posts
+            else:
+                posted_at_raw = posted_at_field
+
+            if not profile_url or not post_id or not posted_at_raw:
+                return None
+
+            if isinstance(posted_at_raw, (int, float)):
+                posted_at = datetime.fromtimestamp(
+                    posted_at_raw / 1000 if posted_at_raw > 1e12 else posted_at_raw,
+                    tz=timezone.utc,
+                )
+            else:
+                posted_at = datetime.fromisoformat(str(posted_at_raw))
+
+            engagement = item.get("engagement") or {}
+            return ApifyProfilePost(
+                profile_url=profile_url,
+                linkedin_post_id=str(post_id),
+                content=item.get("content") or "",
+                posted_at=posted_at,
+                reaction_count=engagement.get("likes")
+                or engagement.get("totalReactions")
+                or 0,
+                comment_count=engagement.get("comments") or 0,
+                share_count=engagement.get("shares") or 0,
+            )
+        except (KeyError, ValueError, TypeError):
+            return None
 
 
 _singleton: RealApifyService | None = None
