@@ -1,8 +1,8 @@
 """Apify service wrapper for the Day-One Backfill slice.
 
-First external HTTP integration since SendGrid/Groq. Follows the Depends()-
-injectable pattern (per sonar/CLAUDE.md Python test mocking rules) so tests
-never touch real Apify.
+External HTTP integration alongside Resend (email) and Groq (LLM). Follows
+the Depends()-injectable pattern (per sonar/CLAUDE.md Python test mocking
+rules) so tests never touch real Apify.
 
 Actor selection, pricing, and schema mapping documented in
 docs/phase-2/backfill-apify-research.md. MVP pick: harvestapi/linkedin-

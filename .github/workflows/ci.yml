@@ -56,8 +56,8 @@ jobs:
       SECRET_KEY: ci-test-secret-key-not-for-prod-do-not-use-32chars
       OPENAI_API_KEY: placeholder-openai-key
       GROQ_API_KEY: placeholder-groq-key
-      SENDGRID_API_KEY: placeholder-sendgrid-key
-      SENDGRID_FROM_EMAIL: ci@example.com
+      RESEND_API_KEY: placeholder-resend-key
+      RESEND_FROM_EMAIL: ci@example.com
       TWILIO_ACCOUNT_SID: placeholder-twilio-sid
       TWILIO_AUTH_TOKEN: placeholder-twilio-token
       TWILIO_WHATSAPP_FROM: "+10000000000"

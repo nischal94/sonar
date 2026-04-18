@@ -136,7 +136,7 @@ Copy `.env.example` to `.env` and fill:
 | `OPENAI_API_KEY` | platform.openai.com | ✅ Yes (embeddings + `gpt-5.4-mini`) |
 | `GROQ_API_KEY` | console.groq.com (free) | ✅ Yes (Llama for med/low alerts) |
 | `APIFY_API_TOKEN` | apify.com | ✅ Yes (Backfill slice) |
-| `SENDGRID_API_KEY` / `SENDGRID_FROM_EMAIL` | sendgrid.com | ✅ Yes (Wizard + Backfill emails) |
+| `RESEND_API_KEY` / `RESEND_FROM_EMAIL` | resend.com | ✅ Yes (Wizard + Backfill emails) |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` | twilio.com | ❌ Optional (WhatsApp channel) |
 | `TELEGRAM_BOT_TOKEN` | @BotFather on Telegram | ❌ Optional (Telegram channel) |
 

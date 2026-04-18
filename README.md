@@ -199,8 +199,8 @@ See [extension/README.md](extension/README.md) for step-by-step instructions.
 | `SECRET_KEY` | ✓ | JWT signing secret (min 32 chars, random) |
 | `OPENAI_API_KEY` | ✓ | OpenAI key for embeddings + GPT-4o mini |
 | `GROQ_API_KEY` | ✓ | Groq key for Llama 3.3 70B (free tier available) |
-| `SENDGRID_API_KEY` | Email alerts | SendGrid API key |
-| `SENDGRID_FROM_EMAIL` | Email alerts | Verified sender address |
+| `RESEND_API_KEY` | Email alerts | Resend API key |
+| `RESEND_FROM_EMAIL` | Email alerts | Verified sender address (use `onboarding@resend.dev` for dev/testing) |
 | `TWILIO_ACCOUNT_SID` | WhatsApp alerts | Twilio account SID |
 | `TWILIO_AUTH_TOKEN` | WhatsApp alerts | Twilio auth token |
 | `TWILIO_WHATSAPP_FROM` | WhatsApp alerts | WhatsApp sender number (`whatsapp:+14155238886`) |

@@ -1,12 +1,13 @@
 import asyncio
-from sendgrid import SendGridAPIClient
-from sendgrid.helpers.mail import Mail
+import resend
 from app.config import get_settings
 
 
 class EmailSender:
     def __init__(self):
-        self._client = SendGridAPIClient(get_settings().sendgrid_api_key)
+        settings = get_settings()
+        resend.api_key = settings.resend_api_key
+        self._from_email = settings.resend_from_email
 
     async def send(self, alert, workspace) -> None:
         config = workspace.delivery_channels.get("email", {})
@@ -35,13 +36,17 @@ class EmailSender:
         </p>
         """
 
-        message = Mail(
-            from_email=get_settings().sendgrid_from_email,
-            to_emails=to_email,
-            subject=subject,
-            html_content=html,
+        # resend.Emails.send is a blocking HTTP call; run it in a thread so
+        # we don't block the event loop.
+        await asyncio.to_thread(
+            resend.Emails.send,
+            {
+                "from": self._from_email,
+                "to": to_email,
+                "subject": subject,
+                "html": html,
+            },
         )
-        await asyncio.to_thread(self._client.send, message)
 
     async def send_backfill_complete(self, workspace, profile_count: int) -> None:
         """One-time onboarding email sent when Day-One Backfill finishes."""
@@ -63,10 +68,12 @@ class EmailSender:
         <p>Going forward, new signals flow into your dashboard automatically as the extension observes your LinkedIn feed.</p>
         """
 
-        message = Mail(
-            from_email=get_settings().sendgrid_from_email,
-            to_emails=to_email,
-            subject=subject,
-            html_content=html,
+        await asyncio.to_thread(
+            resend.Emails.send,
+            {
+                "from": self._from_email,
+                "to": to_email,
+                "subject": subject,
+                "html": html,
+            },
         )
-        await asyncio.to_thread(self._client.send, message)
