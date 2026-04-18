@@ -190,3 +190,16 @@ async def test_status_reports_done_after_completion(client, db_session):
     body = (await client.get("/workspace/backfill/status", headers=hdrs)).json()
     assert body["state"] == "done"
     assert body["profile_count"] == 127
+
+
+@pytest.mark.asyncio
+async def test_status_reports_failed_when_failed_at_set(client, db_session):
+    ws, user = await _seed_workspace(db_session, "stat4@s.com")
+    now = datetime.now(timezone.utc)
+    ws.backfill_used = True
+    ws.backfill_started_at = now
+    ws.backfill_failed_at = now
+    await db_session.commit()
+    hdrs = {"Authorization": f"Bearer {_tok(user.id, ws.id)}"}
+    body = (await client.get("/workspace/backfill/status", headers=hdrs)).json()
+    assert body["state"] == "failed"

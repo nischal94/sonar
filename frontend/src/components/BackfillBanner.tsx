@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import api from "../api/client";
 import { usePolledEndpoint } from "../hooks/usePolledEndpoint";
 
@@ -10,12 +10,22 @@ interface BackfillStatus {
 }
 
 export function BackfillBanner() {
+  const [reachedTerminal, setReachedTerminal] = useState(false);
+
   const fetcher = useCallback(async (): Promise<BackfillStatus> => {
     const { data } = await api.get<BackfillStatus>("/workspace/backfill/status");
+    if (data.state === "done" || data.state === "failed") {
+      // Stop the poll loop once we've observed a terminal state. The banner
+      // continues to render the last-known status from `data`.
+      setReachedTerminal(true);
+    }
     return data;
   }, []);
 
-  const { data } = usePolledEndpoint(fetcher, { intervalMs: 5000 });
+  const { data } = usePolledEndpoint(fetcher, {
+    intervalMs: 5000,
+    enabled: !reachedTerminal,
+  });
 
   if (!data || data.state === "idle") {
     return null;

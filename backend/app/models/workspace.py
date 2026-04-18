@@ -25,6 +25,7 @@ class Workspace(Base):
     backfill_used = Column(Boolean, nullable=False, default=False)
     backfill_started_at = Column(TIMESTAMPTZ)
     backfill_completed_at = Column(TIMESTAMPTZ)
+    backfill_failed_at = Column(TIMESTAMPTZ)
     backfill_profile_count = Column(
         Integer, nullable=False, default=0, server_default="0"
     )

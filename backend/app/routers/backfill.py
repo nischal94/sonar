@@ -30,7 +30,15 @@ async def connections_bulk(
     if not body.connections:
         return ConnectionsBulkResponse(upserted=0)
 
-    linkedin_ids = [c.linkedin_id for c in body.connections]
+    # Dedupe by linkedin_id within the request body — LinkedIn's virtualized
+    # list can emit duplicates when the extension scrolls re-renders over the
+    # same row. Last occurrence wins so the freshest scrape payload sticks.
+    deduped: dict[str, object] = {}
+    for row in body.connections:
+        deduped[row.linkedin_id] = row
+    rows = list(deduped.values())
+
+    linkedin_ids = list(deduped.keys())
     existing = (
         (
             await db.execute(
@@ -45,7 +53,7 @@ async def connections_bulk(
     )
     existing_by_lid = {c.linkedin_id: c for c in existing}
 
-    for row in body.connections:
+    for row in rows:
         e = existing_by_lid.get(row.linkedin_id)
         if e is not None:
             e.name = row.name
@@ -67,7 +75,7 @@ async def connections_bulk(
             )
 
     await db.commit()
-    return ConnectionsBulkResponse(upserted=len(body.connections))
+    return ConnectionsBulkResponse(upserted=len(rows))
 
 
 @router.post("/workspace/backfill/trigger", response_model=BackfillTriggerResponse)
@@ -118,10 +126,12 @@ async def backfill_status(
 
     if not ws.backfill_used:
         state = "idle"
-    elif ws.backfill_completed_at is None:
-        state = "running"
-    else:
+    elif ws.backfill_completed_at is not None:
         state = "done"
+    elif ws.backfill_failed_at is not None:
+        state = "failed"
+    else:
+        state = "running"
 
     return BackfillStatusResponse(
         state=state,

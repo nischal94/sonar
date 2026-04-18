@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import pytest
 from sqlalchemy import select
 from app.models.workspace import Workspace
@@ -9,7 +11,11 @@ from tests.test_apify_service import FakeApify
 
 
 async def _seed_workspace_with_connections(db_session, n_connections: int = 3):
-    ws = Workspace(name="Backfill WS")
+    # In production the /workspace/backfill/trigger endpoint sets
+    # backfill_used=True BEFORE enqueueing the worker. The worker keys
+    # idempotency on backfill_completed_at, not backfill_used — so we
+    # replicate the trigger's pre-set here to mirror the real call path.
+    ws = Workspace(name="Backfill WS", backfill_used=True)
     db_session.add(ws)
     await db_session.flush()
     user = User(workspace_id=ws.id, email="x@x.com", hashed_password="x", role="owner")
@@ -77,7 +83,10 @@ async def test_run_day_one_backfill_caps_at_200_profiles(db_session):
 @pytest.mark.asyncio
 async def test_run_day_one_backfill_is_idempotent(db_session):
     ws = await _seed_workspace_with_connections(db_session, n_connections=2)
-    ws.backfill_used = True  # already backfilled
+    # Idempotency is keyed on backfill_completed_at, matching the "ran to
+    # completion" semantics. Merely-used-but-not-completed workspaces (e.g.
+    # a crashed retry) can be re-run by admin by clearing the column.
+    ws.backfill_completed_at = datetime.now(timezone.utc)
     await db_session.commit()
 
     fake_apify = FakeApify(posts_per_profile=2)
@@ -85,3 +94,25 @@ async def test_run_day_one_backfill_is_idempotent(db_session):
         await run_day_one_backfill(db_session, workspace_id=ws.id, apify=fake_apify)
     # Apify was NOT called
     assert fake_apify.calls == []
+
+
+@pytest.mark.asyncio
+async def test_run_day_one_backfill_marks_failed_on_apify_error(db_session):
+    ws = await _seed_workspace_with_connections(db_session, n_connections=2)
+
+    class ExplodingApify:
+        calls: list = []
+
+        async def scrape_profile_posts(self, profile_urls, days):
+            raise RuntimeError("apify is down")
+
+    with pytest.raises(RuntimeError, match="apify is down"):
+        await run_day_one_backfill(
+            db_session, workspace_id=ws.id, apify=ExplodingApify()
+        )
+
+    reloaded = (
+        await db_session.execute(select(Workspace).where(Workspace.id == ws.id))
+    ).scalar_one()
+    assert reloaded.backfill_failed_at is not None
+    assert reloaded.backfill_completed_at is None
