@@ -63,4 +63,32 @@ document.getElementById('sync-now-btn')?.addEventListener('click', async () => {
   }
 });
 
+document.getElementById("run-day-one-scan")?.addEventListener("click", async () => {
+  const statusEl = document.getElementById("day-one-status");
+  statusEl.textContent = "Scanning connections...";
+  const tabs = await chrome.tabs.query({
+    url: "https://www.linkedin.com/mynetwork/invite-connect/connections/*",
+  });
+  if (!tabs.length) {
+    statusEl.textContent = "Open your LinkedIn connections page first.";
+    return;
+  }
+  chrome.tabs.sendMessage(
+    tabs[0].id,
+    { type: "run_day_one_scan", backendBaseUrl: "http://localhost:8000" },
+    (res) => {
+      if (!res) {
+        statusEl.textContent =
+          "Scan failed to start. Refresh the connections page and try again.";
+        return;
+      }
+      if (res.ok) {
+        statusEl.textContent = `Backfill started for ${res.count} connections. Check your dashboard.`;
+      } else {
+        statusEl.textContent = `Scan failed: ${res.error}`;
+      }
+    }
+  );
+});
+
 init();
