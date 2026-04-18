@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import api from "../api/client";
+import BackfillBanner from "../components/BackfillBanner";
 import { usePolledEndpoint } from "../hooks/usePolledEndpoint";
 
 interface DashboardPerson {
@@ -70,6 +71,7 @@ export function NetworkIntelligenceDashboard() {
 
   return (
     <div style={{ maxWidth: 960, margin: "0 auto", padding: "24px 16px" }}>
+      <BackfillBanner />
       <header style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <h1 style={{ fontSize: 24, margin: 0 }}>Network Intelligence</h1>
         {isStale && <span style={{ fontSize: 12, color: "#888" }}>Updating…</span>}
