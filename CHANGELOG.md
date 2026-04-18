@@ -2,6 +2,20 @@
 
 All notable changes to Sonar are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
+## [0.7.0](https://github.com/nischal94/sonar/compare/v0.6.0...v0.7.0) (2026-04-18)
+
+
+### Added
+
+* **backfill:** pick harvestapi Apify actor + revise cost budget (closes [#76](https://github.com/nischal94/sonar/issues/76)) ([9fb7265](https://github.com/nischal94/sonar/commit/9fb72655cc77f82b790c38baebc3c118349b8d62))
+
+
+### Documentation
+
+* add TODO.html — scannable visual render of TODO.md ([16b5d91](https://github.com/nischal94/sonar/commit/16b5d91f6e0c27ba4eb184ead3ae8ea82bde76ab))
+* session-6 note + TODO trim ([a5a7b61](https://github.com/nischal94/sonar/commit/a5a7b613c742771cbc6dfd10fecf5d41ea232746))
+* trim session-6 note to remove TODO.md overlap ([d9165b8](https://github.com/nischal94/sonar/commit/d9165b84081eb1ff3a5143bcc8f0d831dba483a3))
+
 ## [0.6.0](https://github.com/nischal94/sonar/compare/v0.5.0...v0.6.0) (2026-04-18)
 
 
