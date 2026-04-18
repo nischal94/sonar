@@ -61,7 +61,7 @@ describe("NetworkIntelligenceDashboard", () => {
     expect(screen.getByText(/struggling to hire/i)).toBeInTheDocument();
   });
 
-  it("changing the threshold updates the displayed value", async () => {
+  it("changing the threshold triggers an immediate refetch with the new value", async () => {
     const api = (await import("../api/client")).default as unknown as {
       get: ReturnType<typeof vi.fn>;
     };
@@ -70,18 +70,22 @@ describe("NetworkIntelligenceDashboard", () => {
     });
 
     render(<NetworkIntelligenceDashboard />);
-    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(1));
+    // Initial mount: the hook's mount fetch + the filter-change effect's mount
+    // run = 2 calls. (The extra mount call is accepted cost of instant filter
+    // responsiveness — see NetworkIntelligenceDashboard.tsx.)
+    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
 
-    // The initial threshold is 0.65
     expect(screen.getByText("0.65")).toBeInTheDocument();
 
     const slider = screen.getByRole("slider");
     fireEvent.change(slider, { target: { value: "0.8" } });
 
-    // After the change handler runs, the displayed threshold updates to 0.80.
-    // Note: usePolledEndpoint doesn't refetch on fetcher-identity change
-    // (it only reacts to interval + visibility), so the refetch will happen
-    // on the next poll tick — we assert on the observable state change instead.
+    // The displayed threshold updates + an immediate refetch fires with the
+    // new value (the filter-change effect now covers this — see hook comment).
     await waitFor(() => expect(screen.getByText("0.80")).toBeInTheDocument());
+    await waitFor(() => {
+      const urls = api.get.mock.calls.map((c) => c[0] as string);
+      expect(urls.some((u) => u.includes("threshold=0.8"))).toBe(true);
+    });
   });
 });

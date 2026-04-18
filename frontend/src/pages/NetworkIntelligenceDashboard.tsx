@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import api from "../api/client";
 import { usePolledEndpoint } from "../hooks/usePolledEndpoint";
 
@@ -41,9 +41,19 @@ export function NetworkIntelligenceDashboard() {
     return data;
   }, [threshold, tiers]);
 
-  const { data, error, isLoading, isStale } = usePolledEndpoint(fetcher, {
+  const { data, error, isLoading, isStale, refetch } = usePolledEndpoint(fetcher, {
     intervalMs: 30000,
   });
+
+  // Refetch immediately when filter state changes. The polling hook fires every
+  // 30s — too slow for interactive filter feedback. This effect adds instant
+  // responsiveness: move the slider or toggle a tier → new fetch fires now, not
+  // 30s later. The duplicate fetch on initial mount (hook's mount fetch + this
+  // effect's mount run) is harmless: <100ms backend response, happens once.
+  useEffect(() => {
+    refetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [threshold, tiers]);
 
   const toggleTier = (t: 1 | 2) => {
     const next = new Set(tiers);
