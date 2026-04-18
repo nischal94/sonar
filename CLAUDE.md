@@ -115,6 +115,7 @@ Every Phase 2+ contribution aims to meet these. When skipping something, call it
 - **Response caching** by hash of `(provider, model, prompt, temperature)`. Embeddings especially — cache by content hash; it's the highest-leverage cost reduction we can make.
 - **Temperature = 0 for classifiers and extractors**, higher (0.5-0.8) for creative tasks (outreach drafts, summaries). Document the choice per prompt.
 - **Human-in-the-loop for high-stakes LLM decisions** — outreach drafts, signal proposals, anything customer-facing needs a review queue.
+- **Incremental aggregation pattern.** Pipeline post-scoring work (updating `person_signal_summary`, Redis counters, etc.) lives in `app/workers/incremental_trending.py` and chains to the end of `pipeline.py`. Target runtime <100 ms per call. Future per-post aggregation features (Ring 3 counters, company rollups) follow the same chain-at-end pattern — do NOT inline new aggregation into `pipeline.py` itself. First entry under this convention: Dashboard slice (session 5, 2026-04-18).
 
 ### Agent workflow — how Claude Code sessions work on this project
 - **Read this file in full at session start.** Everything you need is here. If it's out of date, update it in the same commit as the state change — never "cleanup PR later."
