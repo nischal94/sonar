@@ -23,7 +23,11 @@ from app.services.apify import ApifyService
 
 logger = logging.getLogger(__name__)
 
-MAX_CONNECTIONS = 200
+# Dogfood-scale cap (2026-04-18). Production target is 200 — see
+# docs/phase-2/backfill-decisions.md §4. Lowered to keep Apify spend
+# inside the free-tier credit during dogfood. Revert to 200 before
+# first customer backfill (tracked in issue #81).
+MAX_CONNECTIONS = 20
 DAYS_BACK = 60
 
 

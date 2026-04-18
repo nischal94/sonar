@@ -18,10 +18,12 @@ from pydantic import BaseModel
 
 from app.config import get_settings
 
-# Per-profile post cap. See docs/phase-2/backfill-apify-research.md §2 for
-# the cost math: at 10 posts × 200 profiles × $1.50/1k, the worst-case run
-# caps at ~$3 per workspace; realistic runs land at $0.75–$1.50.
-MAX_POSTS_PER_PROFILE = 10
+# Dogfood-scale cap (2026-04-18). Production target is 10 — see
+# docs/phase-2/backfill-apify-research.md §2 for the production cost
+# math. Lowered to 3 to keep Apify spend inside the free-tier credit
+# during dogfood. Revert to 10 before first customer backfill
+# (tracked in issue #81).
+MAX_POSTS_PER_PROFILE = 3
 
 
 class ApifyProfilePost(BaseModel):

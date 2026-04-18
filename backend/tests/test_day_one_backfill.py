@@ -6,7 +6,7 @@ from app.models.workspace import Workspace
 from app.models.user import User
 from app.models.connection import Connection
 from app.models.post import Post
-from app.workers.day_one_backfill import run_day_one_backfill
+from app.workers.day_one_backfill import MAX_CONNECTIONS, run_day_one_backfill
 from tests.test_apify_service import FakeApify
 
 
@@ -64,20 +64,24 @@ async def test_run_day_one_backfill_ingests_posts_and_marks_complete(db_session)
 
 
 @pytest.mark.asyncio
-async def test_run_day_one_backfill_caps_at_200_profiles(db_session):
-    ws = await _seed_workspace_with_connections(db_session, n_connections=250)
+async def test_run_day_one_backfill_caps_at_max_connections(db_session):
+    # Seed more than the cap so we can assert it actually caps. Using
+    # MAX_CONNECTIONS + 10 keeps the test aligned with whatever value is
+    # currently in production (20 for dogfood, 200 for launch).
+    ws = await _seed_workspace_with_connections(
+        db_session, n_connections=MAX_CONNECTIONS + 10
+    )
     fake_apify = FakeApify(posts_per_profile=1)
 
     await run_day_one_backfill(db_session, workspace_id=ws.id, apify=fake_apify)
     await db_session.commit()
 
-    # Only 200 profile URLs forwarded
-    assert len(fake_apify.calls[0]["profile_urls"]) == 200
+    assert len(fake_apify.calls[0]["profile_urls"]) == MAX_CONNECTIONS
 
     reloaded = (
         await db_session.execute(select(Workspace).where(Workspace.id == ws.id))
     ).scalar_one()
-    assert reloaded.backfill_profile_count == 200
+    assert reloaded.backfill_profile_count == MAX_CONNECTIONS
 
 
 @pytest.mark.asyncio
