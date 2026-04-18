@@ -94,7 +94,7 @@ After Phase 2 fully ships: run `superpowers:brainstorming` with "scope Phase 3 o
 
 ## Open issues
 
-- **#76** — Backfill research spikes (Apify 1st-degree actor verification + 2nd-degree ICP-filtered availability)
+- **#80** — Pre-launch: verify Resend sender domain before first customer email
 - **#74** — Dashboard P2/P3 polish nits from PR #73
 - **#69** — Wizard /confirm P3 polish nits from PR #68
 - **#65** — E2E: re-activate register/login Playwright tests (skipped in PR #64)

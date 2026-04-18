@@ -461,8 +461,8 @@
       <a href="docs/session-notes/2026-04-18-session-6.md">docs/session-notes/2026-04-18-session-6.md</a> (bottom of the file)
     </p>
     <div class="hero-meta">
-      <span>🔒 One blocker: <a href="https://github.com/nischal94/sonar/issues/76">#76 Apify actor research</a></span>
-      <span>💰 ~$0.40 / Backfill run</span>
+      <span>✅ No blockers — all dogfood prereqs shipped</span>
+      <span>💰 ~$1.50 / Backfill run</span>
     </div>
   </section>
 
@@ -611,15 +611,15 @@
       </tr>
     </thead>
     <tbody>
-      <tr class="blocker">
-        <td class="issue-num"><a href="https://github.com/nischal94/sonar/issues/76">#76</a></td>
+      <tr>
+        <td class="issue-num"><a href="https://github.com/nischal94/sonar/issues/80">#80</a></td>
         <td>
-          <div class="issue-title">Backfill research spikes</div>
-          <div class="issue-note">Apify 1st-degree actor verification + 2nd-degree ICP-filtered availability. Placeholder actor ID ships today.</div>
+          <div class="issue-title">Verify Resend sender domain before prod</div>
+          <div class="issue-note"><code>onboarding@resend.dev</code> is Resend's test-only default; shared across all free-tier accounts. Deliverability + auth risk for real users.</div>
         </td>
+        <td class="center"><span class="pill neutral">No</span></td>
         <td class="center"><span class="pill bad">Yes</span></td>
-        <td class="center"><span class="pill bad">Yes</span></td>
-        <td>Before dogfood step 4</td>
+        <td>Pre-launch sprint</td>
       </tr>
       <tr>
         <td class="issue-num"><a href="https://github.com/nischal94/sonar/issues/74">#74</a></td>
@@ -703,7 +703,7 @@
       <span class="step-num"></span>
       <div>
         <div class="step-title">Click "Run day-one scan"</div>
-        <div class="step-body">~$0.40 of real Apify money. Does it return posts? Do they match <code>ApifyProfilePost</code>? If either fails, pause and do <a href="https://github.com/nischal94/sonar/issues/76">#76</a> — update <code>RealApifyService._ACTOR_ID</code> to a verified actor.</div>
+        <div class="step-body">~$1.50 of real Apify money (harvestapi at $1.50/1k posts, capped at 10 posts/profile). Does it return posts? Do they match <code>ApifyProfilePost</code>? If either fails, check <a href="docs/phase-2/backfill-apify-research.md">backfill-apify-research.md</a> §5 — the schema may have drifted and <code>_map_row</code> needs a field-access tweak.</div>
       </div>
     </div>
     <div class="step">
