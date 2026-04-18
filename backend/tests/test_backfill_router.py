@@ -153,3 +153,40 @@ async def test_trigger_returns_409_on_second_call(client, db_session):
     resp = await client.post("/workspace/backfill/trigger", headers=hdrs)
     assert resp.status_code == 409
     assert "already" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_status_reports_idle_before_trigger(client, db_session):
+    ws, user = await _seed_workspace(db_session, "stat1@s.com")
+    hdrs = {"Authorization": f"Bearer {_tok(user.id, ws.id)}"}
+    resp = await client.get("/workspace/backfill/status", headers=hdrs)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["state"] == "idle"
+    assert body["profile_count"] == 0
+
+
+@pytest.mark.asyncio
+async def test_status_reports_running_after_start(client, db_session):
+    ws, user = await _seed_workspace(db_session, "stat2@s.com")
+    ws.backfill_used = True
+    ws.backfill_started_at = datetime.now(timezone.utc)
+    await db_session.commit()
+    hdrs = {"Authorization": f"Bearer {_tok(user.id, ws.id)}"}
+    resp = await client.get("/workspace/backfill/status", headers=hdrs)
+    assert resp.json()["state"] == "running"
+
+
+@pytest.mark.asyncio
+async def test_status_reports_done_after_completion(client, db_session):
+    ws, user = await _seed_workspace(db_session, "stat3@s.com")
+    now = datetime.now(timezone.utc)
+    ws.backfill_used = True
+    ws.backfill_started_at = now
+    ws.backfill_completed_at = now
+    ws.backfill_profile_count = 127
+    await db_session.commit()
+    hdrs = {"Authorization": f"Bearer {_tok(user.id, ws.id)}"}
+    body = (await client.get("/workspace/backfill/status", headers=hdrs)).json()
+    assert body["state"] == "done"
+    assert body["profile_count"] == 127

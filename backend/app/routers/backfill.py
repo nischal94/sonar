@@ -10,6 +10,7 @@ from app.models.workspace import Workspace
 from app.rate_limit import limiter
 from app.routers.auth import get_current_user
 from app.schemas.backfill import (
+    BackfillStatusResponse,
     BackfillTriggerResponse,
     ConnectionsBulkRequest,
     ConnectionsBulkResponse,
@@ -102,3 +103,29 @@ async def backfill_trigger(
     # tasks once end-to-end infra is in place.
     task_id = f"backfill-{current_user.workspace_id}-{int(now.timestamp())}"
     return BackfillTriggerResponse(task_id=task_id, backfill_started_at=now)
+
+
+@router.get("/workspace/backfill/status", response_model=BackfillStatusResponse)
+async def backfill_status(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    ws = (
+        await db.execute(
+            select(Workspace).where(Workspace.id == current_user.workspace_id)
+        )
+    ).scalar_one()
+
+    if not ws.backfill_used:
+        state = "idle"
+    elif ws.backfill_completed_at is None:
+        state = "running"
+    else:
+        state = "done"
+
+    return BackfillStatusResponse(
+        state=state,
+        profile_count=ws.backfill_profile_count,
+        backfill_started_at=ws.backfill_started_at,
+        backfill_completed_at=ws.backfill_completed_at,
+    )
