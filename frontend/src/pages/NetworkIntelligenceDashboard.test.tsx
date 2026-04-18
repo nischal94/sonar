@@ -13,13 +13,37 @@ describe("NetworkIntelligenceDashboard", () => {
     vi.clearAllMocks();
   });
 
+  // BackfillBanner renders inside the dashboard and polls /workspace/backfill/status.
+  // Route that URL to an idle response so the banner stays hidden during dashboard tests.
+  const mockApiGet = (
+    api: { get: ReturnType<typeof vi.fn> },
+    dashboardData: unknown
+  ) => {
+    api.get.mockImplementation((url: string) => {
+      if (url.startsWith("/workspace/backfill/status")) {
+        return Promise.resolve({
+          data: {
+            state: "idle",
+            profile_count: 0,
+            backfill_started_at: null,
+            backfill_completed_at: null,
+          },
+        });
+      }
+      return Promise.resolve({ data: dashboardData });
+    });
+  };
+
+  const dashboardCallCount = (api: { get: ReturnType<typeof vi.fn> }) =>
+    api.get.mock.calls.filter(
+      (c) => !(c[0] as string).startsWith("/workspace/backfill/status")
+    ).length;
+
   it("renders loading then empty state when the list is empty", async () => {
     const api = (await import("../api/client")).default as unknown as {
       get: ReturnType<typeof vi.fn>;
     };
-    api.get.mockResolvedValue({
-      data: { people: [], threshold_used: 0.65, total: 0 },
-    });
+    mockApiGet(api, { people: [], threshold_used: 0.65, total: 0 });
 
     render(<NetworkIntelligenceDashboard />);
     await waitFor(() =>
@@ -31,27 +55,25 @@ describe("NetworkIntelligenceDashboard", () => {
     const api = (await import("../api/client")).default as unknown as {
       get: ReturnType<typeof vi.fn>;
     };
-    api.get.mockResolvedValue({
-      data: {
-        people: [
-          {
-            connection_id: "abc",
-            name: "Jane Doe",
-            title: "VP Engineering",
-            company: "Acme",
-            relationship_degree: 1,
-            mutual_count: null,
-            aggregate_score: 0.82,
-            trend_direction: "up",
-            last_signal_at: new Date().toISOString(),
-            recent_post_snippet: "We've been interviewing for 4 months…",
-            matching_signal_phrase: "struggling to hire",
-            recent_post_url: null,
-          },
-        ],
-        threshold_used: 0.65,
-        total: 1,
-      },
+    mockApiGet(api, {
+      people: [
+        {
+          connection_id: "abc",
+          name: "Jane Doe",
+          title: "VP Engineering",
+          company: "Acme",
+          relationship_degree: 1,
+          mutual_count: null,
+          aggregate_score: 0.82,
+          trend_direction: "up",
+          last_signal_at: new Date().toISOString(),
+          recent_post_snippet: "We've been interviewing for 4 months…",
+          matching_signal_phrase: "struggling to hire",
+          recent_post_url: null,
+        },
+      ],
+      threshold_used: 0.65,
+      total: 1,
     });
 
     render(<NetworkIntelligenceDashboard />);
@@ -65,15 +87,14 @@ describe("NetworkIntelligenceDashboard", () => {
     const api = (await import("../api/client")).default as unknown as {
       get: ReturnType<typeof vi.fn>;
     };
-    api.get.mockResolvedValue({
-      data: { people: [], threshold_used: 0.65, total: 0 },
-    });
+    mockApiGet(api, { people: [], threshold_used: 0.65, total: 0 });
 
     render(<NetworkIntelligenceDashboard />);
     // Initial mount: the hook's mount fetch + the filter-change effect's mount
-    // run = 2 calls. (The extra mount call is accepted cost of instant filter
-    // responsiveness — see NetworkIntelligenceDashboard.tsx.)
-    await waitFor(() => expect(api.get).toHaveBeenCalledTimes(2));
+    // run = 2 dashboard calls. (The extra mount call is accepted cost of instant
+    // filter responsiveness — see NetworkIntelligenceDashboard.tsx.) BackfillBanner
+    // also polls /workspace/backfill/status but we filter those out.
+    await waitFor(() => expect(dashboardCallCount(api)).toBe(2));
 
     expect(screen.getByText("0.65")).toBeInTheDocument();
 

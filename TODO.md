@@ -1,8 +1,10 @@
 # Sonar — TODO
 
-## Resume Here (last updated 2026-04-18, session 5)
+## Resume Here (last updated 2026-04-18, session 6)
 
-**This session (2026-04-18, session 5) shipped the Dashboard Ranked People List MVP.** Next natural move: Backfill slice (Day-One Backfill via Chrome extension + Apify) or the Heatmap follow-up to round out `docs/phase-2/design.md §4.3` Section A. Design work required — no implementation plan exists yet for either.
+**This session (2026-04-18, session 6) shipped the Phase 2 Backfill slice — 1st-degree profile scrape via Apify (200 × 60 days cap, ~$0.40/workspace), Chrome extension captures connection list, dashboard banner with 5s polling, completion email.** Next natural move: **Phase 2 Discovery slice** (Ring 3 nightly HDBSCAN clustering for emerging topics + Weekly Digest Email) — the last remaining Phase 2 slice. No implementation plan exists yet; needs `superpowers:brainstorming` first.
+
+**Previous session (2026-04-18, session 5) shipped the Dashboard Ranked People List MVP.**
 
 **Previous session state (session 4):** clean. `main` HEAD = `ce0f958` (Wizard frontend merge). **81 backend tests pass + 3 skipped + 6 frontend vitest tests pass**, all CI green including E2E Playwright. **1 open PR (#71 release-please `v0.4.0`, auto-drafted — merge to cut release). 4 open issues: #43 (blocked upstream), #62 (uvicorn proxy-headers before prod), #65 (Playwright register/login specs re-activation), #69 (Wizard /confirm P3 polish nits).** Latest release: `v0.3.0` (2026-04-17). `v0.4.0` about to cut on #71 merge.
 
@@ -57,14 +59,14 @@ Release (1):
 
 Ingest pipeline, capability profile extraction, signal matching, scoring, alerts, delivery channels (Slack / email / Telegram / WhatsApp), Chrome extension, React dashboard, JWT auth. All 4 known Phase 1 bugs closed; the 5 originally-failing tests are all green; 54/54 on `main`.
 
-### Phase 2 — **3 of 5 slices shipped, 2 remaining**
+### Phase 2 — **4 of 5 slices shipped, 1 remaining**
 
 | Slice | Status | What it is |
 |---|---|---|
 | **Foundation** | ✅ Shipped (PR #10) | Migration 002, 4 new ORM models, Ring 1/2 matchers, pipeline refactor, scorer keyword bonus, one-shot backfill script, 24 new tests |
 | **Wizard** | ✅ Shipped session 4 (PRs #64 + #68 + #70) | Signal Configuration Wizard — backend API (`POST /workspace/signals/propose` + `/confirm`, `signal_proposal_events` telemetry, `app/prompts/propose_signals.py` v1, idempotency + role-separation defense) + frontend 5-step `SignalConfig.tsx` at `/signals/setup` + Onboarding redirect. Plan at `docs/phase-2/implementation-wizard.md`, decisions at `docs/phase-2/wizard-decisions.md`. |
 | **Dashboard** | ✅ Shipped session 5 (this PR — Ranked People List MVP) | Ranked People List at `/dashboard`. `incremental_trending` Celery task keeps `person_signal_summary` fresh within ~100 ms of each scored post. `GET /workspace/dashboard/people` joins `person_signal_summary + connections + posts + signals`. Frontend polls every 30s with tab-visibility pause + instant refetch on filter change. Threshold slider + 1st/2nd-degree filters. Heatmap (Section A) + Trending Topics (Section C) deferred to follow-up slices. |
-| **Backfill** | ⬜ Not started | Day-One Backfill — Chrome extension + Apify integration to seed the system with historical posts on first install. Depends on Phase 1 extension working + signals to match against (Wizard). |
+| **Backfill** | ✅ Shipped session 6 (this PR — 1st-degree only) | Day-One Backfill. Extension captures connection list → `/extension/connections/bulk` upserts `Connection` rows → `/workspace/backfill/trigger` starts the `day_one_backfill` Celery task (idempotent via `Workspace.backfill_used`) → Apify 1st-degree scrape caps at 200 × 60 days → posts flow through pipeline → completion email via `EmailSender.send_backfill_complete`. Dashboard banner polls `/workspace/backfill/status` at 5s. 2nd-degree ICP-filtered scrape deferred — research spike deferred to follow-up issue. |
 | **Discovery** | ⬜ Not started | Ring 3 nightly HDBSCAN clustering for emerging topics + Weekly Digest Email. Most experimental — best built last when there's real data. |
 
 **Recommended order:** Dashboard → Backfill → Discovery (matches dependency direction). Next action: `superpowers:brainstorming` on `docs/phase-2/design.md §4.3` to produce `docs/phase-2/implementation-dashboard.md`.
