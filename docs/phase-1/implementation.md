@@ -1,5 +1,7 @@
 # Sonar Phase 1 Implementation Plan
 
+> ⚠️ **Historical note (2026-04-18):** This plan was executed using SendGrid as the email provider. The project later migrated to Resend in commit [`ed75626`](https://github.com/nischal94/sonar/commit/ed75626). SendGrid references below reflect what shipped at the time — the current code in `backend/app/delivery/email.py` uses Resend.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a working end-to-end Sonar MVP — from onboarding (URL → capability profile) through LinkedIn feed ingestion (Chrome extension) to AI-matched alert delivery via Slack, email, WhatsApp, and Telegram.

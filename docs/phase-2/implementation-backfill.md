@@ -1,5 +1,7 @@
 # Sonar Phase 2 — Backfill Implementation Plan
 
+> ⚠️ **Historical note (2026-04-18):** This plan was executed using SendGrid as the email provider (the pattern inherited from Phase 1). The project migrated to Resend later the same day in commit [`ed75626`](https://github.com/nischal94/sonar/commit/ed75626). SendGrid references below reflect what shipped at the time — the current code in `backend/app/delivery/email.py` uses Resend.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Ship Day-One Backfill — a new user completes the wizard, clicks "Run day-one scan" in the extension, and within ~5 minutes the dashboard is populated with real network signals from up to 200 1st-degree connections × 60 days of post history.
