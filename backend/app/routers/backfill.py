@@ -1,13 +1,16 @@
 from __future__ import annotations
-from fastapi import APIRouter, Depends, Request
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.connection import Connection
 from app.models.user import User
+from app.models.workspace import Workspace
 from app.rate_limit import limiter
 from app.routers.auth import get_current_user
 from app.schemas.backfill import (
+    BackfillTriggerResponse,
     ConnectionsBulkRequest,
     ConnectionsBulkResponse,
 )
@@ -64,3 +67,38 @@ async def connections_bulk(
 
     await db.commit()
     return ConnectionsBulkResponse(upserted=len(body.connections))
+
+
+@router.post("/workspace/backfill/trigger", response_model=BackfillTriggerResponse)
+@limiter.limit("2/day")
+async def backfill_trigger(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    ws = (
+        await db.execute(
+            select(Workspace).where(Workspace.id == current_user.workspace_id)
+        )
+    ).scalar_one()
+    if ws.backfill_used:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Backfill already used for this workspace (started at "
+                f"{ws.backfill_started_at.isoformat() if ws.backfill_started_at else 'unknown'})"
+            ),
+        )
+
+    # Mark started now to prevent race with a second trigger before the
+    # Celery task picks up.
+    now = datetime.now(timezone.utc)
+    ws.backfill_used = True
+    ws.backfill_started_at = now
+    await db.commit()
+
+    # In prod: enqueue Celery task. For MVP test visibility we return a
+    # synthesized task_id — the actual Celery dispatch is wired in later
+    # tasks once end-to-end infra is in place.
+    task_id = f"backfill-{current_user.workspace_id}-{int(now.timestamp())}"
+    return BackfillTriggerResponse(task_id=task_id, backfill_started_at=now)

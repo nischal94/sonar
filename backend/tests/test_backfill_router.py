@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 import pytest
 from sqlalchemy import select
 from app.models.user import User
@@ -120,3 +122,34 @@ async def test_connections_bulk_rejects_unauthenticated(client):
         json={"connections": []},
     )
     assert resp.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_trigger_sets_started_at_on_first_call(client, db_session):
+    ws, user = await _seed_workspace(db_session, "trig1@t.com")
+    hdrs = {"Authorization": f"Bearer {_tok(user.id, ws.id)}"}
+
+    resp = await client.post("/workspace/backfill/trigger", headers=hdrs)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "task_id" in body
+    assert "backfill_started_at" in body
+
+    reloaded = (
+        await db_session.execute(select(Workspace).where(Workspace.id == ws.id))
+    ).scalar_one()
+    assert reloaded.backfill_used is True
+    assert reloaded.backfill_started_at is not None
+
+
+@pytest.mark.asyncio
+async def test_trigger_returns_409_on_second_call(client, db_session):
+    ws, user = await _seed_workspace(db_session, "trig2@t.com")
+    ws.backfill_used = True
+    ws.backfill_started_at = datetime.now(timezone.utc)
+    await db_session.commit()
+    hdrs = {"Authorization": f"Bearer {_tok(user.id, ws.id)}"}
+
+    resp = await client.post("/workspace/backfill/trigger", headers=hdrs)
+    assert resp.status_code == 409
+    assert "already" in resp.json()["detail"].lower()
