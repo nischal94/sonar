@@ -5,6 +5,7 @@ import { AlertFeed } from './pages/AlertFeed';
 import { OpportunityBoard } from './pages/OpportunityBoard';
 import { Settings } from './pages/Settings';
 import SignalConfig from './pages/SignalConfig';
+import NetworkIntelligenceDashboard from './pages/NetworkIntelligenceDashboard';
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('sonar_token');
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="/board" element={<RequireAuth><Nav /><OpportunityBoard /></RequireAuth>} />
         <Route path="/settings" element={<RequireAuth><Nav /><Settings /></RequireAuth>} />
         <Route path="/signals/setup" element={<RequireAuth><Nav /><SignalConfig /></RequireAuth>} />
+        <Route path="/dashboard" element={<RequireAuth><Nav /><NetworkIntelligenceDashboard /></RequireAuth>} />
       </Routes>
     </BrowserRouter>
   );

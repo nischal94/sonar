@@ -1,8 +1,10 @@
 # Sonar — TODO
 
-## Resume Here (last updated 2026-04-18, session 4)
+## Resume Here (last updated 2026-04-18, session 5)
 
-**Current state:** clean. `main` HEAD = `ce0f958` (Wizard frontend merge). **81 backend tests pass + 3 skipped + 6 frontend vitest tests pass**, all CI green including E2E Playwright. **1 open PR (#71 release-please `v0.4.0`, auto-drafted — merge to cut release). 4 open issues: #43 (blocked upstream), #62 (uvicorn proxy-headers before prod), #65 (Playwright register/login specs re-activation), #69 (Wizard /confirm P3 polish nits).** Latest release: `v0.3.0` (2026-04-17). `v0.4.0` about to cut on #71 merge.
+**This session (2026-04-18, session 5) shipped the Dashboard Ranked People List MVP.** Next natural move: Backfill slice (Day-One Backfill via Chrome extension + Apify) or the Heatmap follow-up to round out `docs/phase-2/design.md §4.3` Section A. Design work required — no implementation plan exists yet for either.
+
+**Previous session state (session 4):** clean. `main` HEAD = `ce0f958` (Wizard frontend merge). **81 backend tests pass + 3 skipped + 6 frontend vitest tests pass**, all CI green including E2E Playwright. **1 open PR (#71 release-please `v0.4.0`, auto-drafted — merge to cut release). 4 open issues: #43 (blocked upstream), #62 (uvicorn proxy-headers before prod), #65 (Playwright register/login specs re-activation), #69 (Wizard /confirm P3 polish nits).** Latest release: `v0.3.0` (2026-04-17). `v0.4.0` about to cut on #71 merge.
 
 **This session (2026-04-17 → 2026-04-18, session 4) shipped the full Phase 2 Wizard slice end-to-end + testing ladder + misc infra. PRs merged:**
 
@@ -55,13 +57,13 @@ Release (1):
 
 Ingest pipeline, capability profile extraction, signal matching, scoring, alerts, delivery channels (Slack / email / Telegram / WhatsApp), Chrome extension, React dashboard, JWT auth. All 4 known Phase 1 bugs closed; the 5 originally-failing tests are all green; 54/54 on `main`.
 
-### Phase 2 — 2 of 5 slices shipped, 3 remaining
+### Phase 2 — **3 of 5 slices shipped, 2 remaining**
 
 | Slice | Status | What it is |
 |---|---|---|
 | **Foundation** | ✅ Shipped (PR #10) | Migration 002, 4 new ORM models, Ring 1/2 matchers, pipeline refactor, scorer keyword bonus, one-shot backfill script, 24 new tests |
 | **Wizard** | ✅ Shipped session 4 (PRs #64 + #68 + #70) | Signal Configuration Wizard — backend API (`POST /workspace/signals/propose` + `/confirm`, `signal_proposal_events` telemetry, `app/prompts/propose_signals.py` v1, idempotency + role-separation defense) + frontend 5-step `SignalConfig.tsx` at `/signals/setup` + Onboarding redirect. Plan at `docs/phase-2/implementation-wizard.md`, decisions at `docs/phase-2/wizard-decisions.md`. |
-| **Dashboard** | ⬜ Not started | Network Intelligence Dashboard — heatmap of buying intent across the user's network + incremental aggregation pipeline. Depends on Wizard (configurable signals first) — now unblocked. Design reference: `docs/phase-2/design.md §4.3`. No implementation plan yet. |
+| **Dashboard** | ✅ Shipped session 5 (this PR — Ranked People List MVP) | Ranked People List at `/dashboard`. `incremental_trending` Celery task keeps `person_signal_summary` fresh within ~100 ms of each scored post. `GET /workspace/dashboard/people` joins `person_signal_summary + connections + posts + signals`. Frontend polls every 30s with tab-visibility pause + instant refetch on filter change. Threshold slider + 1st/2nd-degree filters. Heatmap (Section A) + Trending Topics (Section C) deferred to follow-up slices. |
 | **Backfill** | ⬜ Not started | Day-One Backfill — Chrome extension + Apify integration to seed the system with historical posts on first install. Depends on Phase 1 extension working + signals to match against (Wizard). |
 | **Discovery** | ⬜ Not started | Ring 3 nightly HDBSCAN clustering for emerging topics + Weekly Digest Email. Most experimental — best built last when there's real data. |
 
