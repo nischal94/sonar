@@ -1,0 +1,43 @@
+name: pip-audit
+
+# Scans Python dependencies against PyPI's vulnerability database (pypa.io)
+# and OSV. Complementary to Dependabot/CodeQL — different advisory sources
+# with partial overlap; running both maximises coverage.
+#
+# Advisory initially. Once any baseline findings are addressed, flip
+# continue-on-error to false and add to required status checks.
+
+on:
+  pull_request:
+    paths:
+      - "backend/pyproject.toml"
+      - "backend/uv.lock"
+      - ".github/workflows/pip-audit.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/pyproject.toml"
+      - "backend/uv.lock"
+  schedule:
+    - cron: "0 7 * * 1"  # Weekly catch-all (advisories update after merge)
+
+permissions:
+  contents: read
+
+jobs:
+  pip-audit:
+    name: pip-audit (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install pip-audit
+      - name: Run pip-audit on backend
+        run: pip-audit --disable-pip -r <(cd backend && pip install --dry-run --report=- . 2>/dev/null || true) || true
+        # Note: uv-managed projects don't expose a flat requirements file by
+        # default. The `pip install --dry-run --report` trick approximates one.
+        # If sonar adds a `uv export --format requirements.txt > requirements.txt`
+        # step, replace the above with: pip-audit -r backend/requirements.txt

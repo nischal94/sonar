@@ -1,0 +1,37 @@
+name: actionlint
+
+# Static analysis for the workflow YAML in this repo. Catches typos in
+# ${{ ... }} expressions, undefined contexts, broken `if:` conditions,
+# unsafe shell-injection patterns, and use of deprecated action versions
+# BEFORE they fail at runtime in some unlucky branch.
+#
+# Only fires when workflow files themselves change.
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    # Initially advisory: actionlint surfaces pre-existing shellcheck
+    # warnings in e2e.yml on first run (unused loop vars, unquoted
+    # command substitutions). Same baseline pattern as bandit / trivy.
+    # Promote to required (remove continue-on-error) once those are
+    # resolved in a dedicated cleanup PR.
+    name: actionlint (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - name: Download actionlint
+        run: bash <(curl -fsSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash)
+      - name: Run actionlint
+        run: ./actionlint -color

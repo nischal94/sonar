@@ -1,0 +1,57 @@
+name: trivy
+
+# Two-pronged Trivy scan:
+#   1. Filesystem scan — finds vulnerable deps + misconfigurations across
+#      backend (Python), frontend (npm), Dockerfile, and IaC.
+#   2. Dockerfile config scan — flags base-image/Dockerfile best practices
+#      (no USER directive, root processes, unpinned tags, etc).
+#
+# Container-image scanning is intentionally NOT run here — sonar's ci.yml
+# already builds the backend image; if you want CVE scanning of the built
+# image, add a `trivy image` step to ci.yml's docker-backend job to reuse
+# the built artifact.
+#
+# Advisory while the baseline is established.
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "**/Dockerfile*"
+      - "docker-compose*.yml"
+      - ".github/workflows/trivy.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - "**/Dockerfile*"
+      - "docker-compose*.yml"
+
+permissions:
+  contents: read
+  security-events: write  # for SARIF upload to the Security tab
+
+jobs:
+  trivy-fs:
+    name: trivy filesystem (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - name: Run Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: fs
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-results.sarif
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy-fs
