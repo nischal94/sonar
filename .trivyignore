@@ -1,0 +1,23 @@
+# Trivy filesystem scan ignore file.
+#
+# Format: one ID per line. See https://aquasecurity.github.io/trivy/v0.35/docs/configuration/filtering/
+#
+# Each ignore should explain WHY — these aren't permanent, they should be
+# revisited periodically.
+
+# rand 0.8.5 / 0.9.2 — used by uv binary's Rust deps. Will resolve when
+# astral-sh ships a uv with updated rand. Not our code, not actionable
+# from this repo. Severity: LOW.
+GHSA-cq8v-f236-94qc
+
+# pip in base Python image. Will resolve when we bump base image (next
+# python:3.12-slim release). Severity: LOW.
+CVE-2026-1703
+
+# pip in base Python image. Same fix path as above. Severity: MEDIUM.
+CVE-2025-8869
+
+# Dockerfile HEALTHCHECK missing. Tracked separately — see follow-up
+# in nischal94/sonar#88 for the USER directive work that touches the
+# same Dockerfiles. Severity: LOW.
+DS-0026
