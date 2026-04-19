@@ -51,9 +51,9 @@ def upgrade():
         )
     ).scalar()
     if orphan_count:
-        # nosec B608 — f-string contains a static SQL hint inside an error
-        # message; not executed. orphan_count is an int from a COUNT(*) query.
-        raise RuntimeError(
+        # f-string contains a static SQL hint inside an error message;
+        # not executed. orphan_count is an int from a COUNT(*) query.
+        raise RuntimeError(  # nosec B608
             f"[migration 003] Cannot add connections_user_id_fkey: "
             f"{orphan_count} orphan row(s) in `connections` reference a non-existent "
             f"user. Inspect with: SELECT c.id, c.user_id FROM connections c "
