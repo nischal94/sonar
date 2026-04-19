@@ -5,6 +5,7 @@
 ![Node](https://img.shields.io/badge/node-20+-green.svg)
 ![Status](https://img.shields.io/badge/phase-2%20foundation%20shipped-brightgreen.svg)
 ![Tests](https://img.shields.io/badge/tests-54%2F54%20passing-brightgreen.svg)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/nischal94/sonar/badge)](https://securityscorecards.dev/viewer/?uri=github.com/nischal94/sonar)
 
 **Network-aware LinkedIn intent intelligence for B2B revenue teams.**
 
