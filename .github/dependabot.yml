@@ -1,23 +1,31 @@
 version: 2
 
-# Grouping converts update bursts into 1-3 grouped PRs/week per ecosystem
-# instead of N separate PRs. Major upgrades stay individual (breaking
-# changes deserve individual review). See
-# nischal94/repo-template/docs/SECURITY-OPERATIONS.md §5 for the rationale.
+# 3-group pattern (security + minor-patch + majors-individual):
+#   1. <eco>-security    → all vulnerability fixes (urgent)
+#   2. <eco>-minor-patch → safe semver bumps
+#   3. (majors stay individual — breaking changes deserve isolated review
+#      so a v6→v7 upgrade can't take down a grouped PR's CI and block
+#      the safe patches inside it)
+#
+# `open-pull-requests-limit: 2` is a HARD CAP independent of grouping.
+# If the 3-group config ever permits more than 2 PRs per ecosystem, the
+# limit kicks in. Sonar's previous limit of 5 produced a 9-PR burst on
+# first scan — 2 is the new ceiling.
+#
+# For dormant repos where per-major review isn't worth the per-PR
+# overhead, switch to FULL grouping (2 groups: security + all-versions).
+# See nischal94/repo-template/docs/SECURITY-OPERATIONS.md §5.
 
 updates:
-  # Backend Python dependencies (pyproject.toml). Dependabot updates the
-  # version pins in pyproject.toml; uv.lock is regenerated as part of merging
-  # (manual `uv sync --all-extras` in the api container if needed).
+  # Backend Python dependencies (pyproject.toml). uv.lock is regenerated
+  # at merge time (`uv sync --all-extras` in the api container if needed).
   - package-ecosystem: "pip"
     directory: "/backend"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "backend"
+    open-pull-requests-limit: 2
+    labels: ["dependencies", "backend"]
     commit-message:
       prefix: "chore(deps)"
       include: "scope"
@@ -35,10 +43,8 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 5
-    labels:
-      - "dependencies"
-      - "frontend"
+    open-pull-requests-limit: 2
+    labels: ["dependencies", "frontend"]
     commit-message:
       prefix: "chore(deps)"
       include: "scope"
@@ -50,16 +56,14 @@ updates:
         applies-to: version-updates
         update-types: ["minor", "patch"]
 
-  # E2E npm dependencies (Playwright + test deps live separately).
+  # E2E npm dependencies (Playwright + test deps).
   - package-ecosystem: "npm"
     directory: "/e2e"
     schedule:
       interval: "weekly"
       day: "monday"
-    open-pull-requests-limit: 3
-    labels:
-      - "dependencies"
-      - "e2e"
+    open-pull-requests-limit: 2
+    labels: ["dependencies", "e2e"]
     commit-message:
       prefix: "chore(deps)"
       include: "scope"
@@ -76,15 +80,13 @@ updates:
     directory: "/"
     schedule:
       interval: "monthly"
-    labels:
-      - "dependencies"
-      - "ci"
+    open-pull-requests-limit: 2
+    labels: ["dependencies", "ci"]
     commit-message:
       prefix: "chore(ci)"
       include: "scope"
     groups:
       gh-actions:
-        applies-to: version-updates
         patterns: ["*"]
 
   # Backend Dockerfile base-image updates.
@@ -92,9 +94,8 @@ updates:
     directory: "/backend"
     schedule:
       interval: "weekly"
-    labels:
-      - "dependencies"
-      - "docker"
+    open-pull-requests-limit: 2
+    labels: ["dependencies", "docker"]
     commit-message:
       prefix: "chore(docker)"
       include: "scope"
