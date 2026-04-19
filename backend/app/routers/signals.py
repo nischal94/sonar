@@ -65,7 +65,17 @@ async def propose_signals(
     )
     try:
         payload = json.loads(_strip_markdown_fence(raw))
-        signals_raw = payload["signals"]
+        # gpt-5.4-mini sometimes returns the top-level array directly
+        # (`[{...}, ...]`) instead of the documented `{"signals": [...]}`
+        # shape — accept either form defensively. Long-term fix is to wire
+        # OpenAI Structured Outputs via response_format=json_schema (see
+        # RESPONSE_JSON_SCHEMA in propose_signals.py), tracked in follow-up.
+        if isinstance(payload, list):
+            signals_raw = payload
+        elif isinstance(payload, dict):
+            signals_raw = payload["signals"]
+        else:
+            raise ValueError(f"unexpected LLM output type: {type(payload).__name__}")
         signals = [ProposedSignal(**s) for s in signals_raw]
     except (json.JSONDecodeError, KeyError, ValueError, TypeError) as exc:
         raise HTTPException(status_code=502, detail=f"LLM output parse failed: {exc}")

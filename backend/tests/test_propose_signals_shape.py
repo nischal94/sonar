@@ -46,8 +46,17 @@ async def test_propose_signals_prompt_produces_valid_shape(inputs):
     production acceptance rate, not here. See docs/phase-2/wizard-decisions.md §3b."""
     provider = OpenAILLMProvider()
     user_msg = build_user_message(inputs["what_you_sell"], inputs["icp"])
-    prompt = f"<|system|>\n{SYSTEM_PROMPT}\n<|user|>\n{user_msg}"
-    raw = await provider.complete(prompt, model=OPENAI_MODEL_EXPENSIVE)
+    # Mirror the production call site (app/routers/signals.py::propose_signals):
+    # pass SYSTEM_PROMPT via the system kwarg, NOT concatenated into the user
+    # message. Inlining violates the prompt-injection discipline in CLAUDE.md —
+    # user input must only appear in the user-role message. max_tokens matches
+    # the router so truncation behavior is identical.
+    raw = await provider.complete(
+        user_msg,
+        model=OPENAI_MODEL_EXPENSIVE,
+        system=SYSTEM_PROMPT,
+        max_tokens=4096,
+    )
 
     # Strip markdown fence if present
     s = raw.strip()
@@ -57,8 +66,15 @@ async def test_propose_signals_prompt_produces_valid_shape(inputs):
             s = s[:-3]
     payload = json.loads(s.strip())
 
-    assert "signals" in payload
-    signals = payload["signals"]
+    # Mirror the router's shape tolerance: accept either a top-level list
+    # `[{...}]` or the documented `{"signals": [...]}` dict form. gpt-5.4-mini
+    # emits both shapes depending on the call. Long-term fix is Structured
+    # Outputs via response_format=json_schema; tracked in followup.
+    if isinstance(payload, list):
+        signals = payload
+    else:
+        assert "signals" in payload
+        signals = payload["signals"]
     assert 8 <= len(signals) <= 10, f"expected 8-10 signals, got {len(signals)}"
 
     phrases_seen = set()
