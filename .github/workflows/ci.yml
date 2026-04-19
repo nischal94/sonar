@@ -146,7 +146,7 @@ jobs:
       # category "trivy-image" so they don't collide with the filesystem
       # scan run in trivy.yml (category "trivy-fs").
       - name: Trivy image scan (advisory)
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.35.0
         continue-on-error: true
         with:
           image-ref: sonar-backend:ci
