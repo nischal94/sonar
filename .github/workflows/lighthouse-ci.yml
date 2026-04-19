@@ -1,0 +1,53 @@
+name: Lighthouse CI
+
+# Performance + a11y + SEO + best-practices gate on the frontend build.
+# Runs against the static vite output served via http-server. Advisory
+# initially — promote to blocking after baseline scores are established.
+#
+# Reports are uploaded as a workflow artifact (downloadable from the
+# run page) and summarised in the action output.
+
+on:
+  pull_request:
+    paths:
+      - "frontend/**"
+      - ".github/workflows/lighthouse-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+
+permissions:
+  contents: read
+
+jobs:
+  lighthouse:
+    name: Lighthouse CI (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - name: Run Lighthouse CI
+        uses: treosh/lighthouse-ci-action@v12
+        with:
+          # Serve dist/ on port 8080 and audit the index. URLs can be
+          # extended once specific routes deserve dedicated audits.
+          urls: |
+            http://localhost:8080/
+          uploadArtifacts: true
+          temporaryPublicStorage: false
+          configPath: ./.lighthouserc.json
+        env:
+          # The action will start its own server when no URL is reachable;
+          # we don't need to pre-spawn one for a static build.
+          LHCI_BUILD_CONTEXT__GIT_REMOTE: ${{ github.repository }}
