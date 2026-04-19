@@ -452,19 +452,81 @@
     </div>
   </section>
 
-  <!-- HERO: next action -->
+  <!-- HERO: first action next session -->
   <section class="hero">
-    <span class="pill info">Next action</span>
-    <h3 style="margin-top:10px">Fix #105, then run threshold calibration (#106)</h3>
-    <p>Scorer hits a 0.5 default on relationship for 1st-degree connections (should be 0.9), surfaced when the dogfood dashboard showed every scored post at uniform 0.5. Once fixed, combined-score ceiling on backfilled posts shifts from 0.77 → 0.89 and the empirically-justified matching threshold becomes discoverable via a golden-eval ROC sweep.</p>
-    <p class="tight" style="margin-top:10px">Dogfood findings in full:
-      <a href="docs/session-notes/2026-04-20-session-7.md">docs/session-notes/2026-04-20-session-7.md</a>
-    </p>
+    <span class="pill info">Start here tomorrow</span>
+    <h3 style="margin-top:10px">⏱ Verify the dashboard populates (5 minutes)</h3>
+    <p>Open <code>http://localhost:5173</code>, log in, check the intent-matches pane shows the 8 backfilled posts that crossed <code>matching_threshold=0.30</code> on the dogfood workspace. It's the only thing left unverified from session 7 — all code is merged and pushed.</p>
     <div class="hero-meta">
-      <span>🐛 #105 (blocks #106) → 🎯 #106 calibration → 🧭 Phase 2 Discovery</span>
-      <span>💰 ~$0.09 / Backfill run at dogfood caps ($1.50 at prod caps)</span>
+      <span>After this: 🐛 #105 (scorer bug, blocks #106) → 🎯 #106 threshold calibration → 🔒 #107+#108 security → 🧭 Phase 2 Discovery</span>
+      <span>Full 6-item plan with rationale in the Next Session Action Plan section below</span>
     </div>
   </section>
+
+  <!-- NEXT SESSION ACTION PLAN — mirrors TODO.md §"Next Session Action Plan" -->
+  <h2>Next Session Action Plan <span style="font-size: 12px; color: var(--ink-soft); font-weight: normal;">(last rewritten 2026-04-20, end of session 7)</span></h2>
+  <p class="tight" style="color: var(--ink-soft); margin-bottom: 16px;">Ordered. Item 1 is literally the first thing to do. Each item has What / Why now / Blocks / Effort.</p>
+
+  <div class="action-plan">
+    <details open>
+      <summary><strong>1. ⏱ Verify the end-to-end loop</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">5 minutes &middot; do first</span></summary>
+      <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
+        <li><strong>What:</strong> Open <code>http://localhost:5173</code>, log in, check the intent-matches pane shows the 8 backfilled posts that crossed <code>matching_threshold=0.30</code>.</li>
+        <li><strong>Why now:</strong> Only thing left unverified from session 7. If it works, Backfill is truly shipped. If it doesn't, the chain has one more bug before #105 matters.</li>
+        <li><strong>Blocks:</strong> Nothing downstream, but unresolved until the dashboard is eyed.</li>
+        <li><strong>Effort:</strong> 5 minutes.</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary><strong>2. 🐛 Fix issue <a href="https://github.com/nischal94/sonar/issues/105">#105</a> — <code>relationship_score</code> default fallback bug</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">1–2 hours &middot; BLOCKER for #106</span></summary>
+      <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
+        <li><strong>What:</strong> Scorer returns <code>0.5</code> for every 1st-degree connection instead of the documented <code>0.9</code>. Investigate <code>app/workers/scorer.py</code>, locate the default-fallback path, fix to read <code>Connection.degree</code>, add a regression test asserting <code>relationship_score ≥ 0.9</code> for degree=1.</li>
+        <li><strong>Why now:</strong> Blocks #106 — calibration against a broken scorer produces a broken threshold. Also raises combined-score ceiling on backfilled posts from 0.77 → 0.89.</li>
+        <li><strong>Blocks:</strong> <a href="https://github.com/nischal94/sonar/issues/106">#106</a> (threshold calibration).</li>
+        <li><strong>Effort:</strong> 1–2 hours. Small isolated fix.</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary><strong>3. 🎯 Plan and execute issue <a href="https://github.com/nischal94/sonar/issues/106">#106</a> — threshold calibration</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">full session &middot; blocked by #105</span></summary>
+      <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
+        <li><strong>What:</strong> Build a golden eval dataset of ~100-200 real LinkedIn posts labeled "IS a buying-intent signal" vs "isn't." Run the scorer across thresholds 0.2–0.9. Plot precision/recall. Pick the elbow (may produce a split live vs. backfill threshold).</li>
+        <li><strong>Why now:</strong> The 0.72 default was never empirically tuned. Live dogfood showed it's mathematically unreachable for posts older than 24h.</li>
+        <li><strong>Blocks:</strong> Confidence in the product's matching claim. The product is "half-broken by design" until this lands.</li>
+        <li><strong>Effort:</strong> Full session. Includes hand-labeling work.</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary><strong>4. 🔒 Hardening: issues <a href="https://github.com/nischal94/sonar/issues/107">#107</a> + <a href="https://github.com/nischal94/sonar/issues/108">#108</a></strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">~1.5 hours combined &middot; do before first external user</span></summary>
+      <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
+        <li><strong>#107 — CORS service-worker routing:</strong> Route extension fetches through the background service worker (origin <code>chrome-extension://&lt;id&gt;</code>, already allowed). Remove <code>https://www.linkedin.com</code> from <code>app/main.py</code> <code>allow_origins</code>. Closes the <code>/auth/token</code> response-read exposure tonight's CORS widening created. <strong>Effort:</strong> ~1 hour.</li>
+        <li><strong>#108 — Apify token to Authorization header:</strong> Move from URL query param (<code>?token=apify_api_...</code>) to <code>Authorization: Bearer</code> in <code>app/services/apify.py</code>. Verify harvestapi accepts header auth. Stops plaintext-token leak into worker logs. <strong>Effort:</strong> ~30 minutes.</li>
+        <li><strong>Why now:</strong> Both small, both security-adjacent. Best done in one commit before any external user signs up.</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary><strong>5. 🧭 Phase 2 Discovery slice</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">multi-session &middot; final Phase 2 slice</span></summary>
+      <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
+        <li><strong>What:</strong> Ring 3 nightly HDBSCAN clustering for emerging topics + Weekly Digest Email. Per <code>docs/phase-2/design.md §4.4</code>.</li>
+        <li><strong>Why now:</strong> After #105 + #106, matching quality is trustworthy enough to build discovery on top of. Before that, clusters would form around noise.</li>
+        <li><strong>Start with:</strong> <code>superpowers:brainstorming</code> to scope decisions (clustering approach, digest template, schedule, opt-in flow).</li>
+        <li><strong>Effort:</strong> Multi-session. Most uncertainty of any Phase 2 slice.</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary><strong>6. 🚧 Pre-launch tier</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">NOT next-session work — tracked so it doesn't surprise</span></summary>
+      <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
+        <li><strong>PII/GDPR:</strong> data retention policy + export + deletion endpoints. Not started.</li>
+        <li><strong>Observability:</strong> structlog + Sentry + Prometheus + split <code>/health/live</code> vs <code>/ready</code> + DB backup/restore drill. Not started.</li>
+        <li><strong>LLM eval harness:</strong> activates once <code>signal_proposal_events</code> has ~100+ real completions.</li>
+        <li><strong>Frontend dep bumps:</strong> React 18→19, Vite 6→8, react-router-dom 6→7. Tracked in <a href="https://github.com/nischal94/sonar/issues/40">#40</a>. Requires human in browser — plan a dedicated half-day.</li>
+      </ul>
+    </details>
+  </div>
 
   <!-- PHASE STATUS -->
   <h2>Phase status</h2>
