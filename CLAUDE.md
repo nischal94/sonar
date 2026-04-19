@@ -154,6 +154,7 @@ Every Phase 2+ contribution aims to meet these. When skipping something, call it
 - **Conventional Commits** (`feat(scope): ...`, `fix(scope): ...`). Commit messages explain the *why*, not the *what*.
 - **Issue and PR templates** in `.github/` — minimal bug template + minimal PR template.
 - **Session notes** in `docs/session-notes/YYYY-MM-DD.md` at the end of substantive work sessions, so the next session can resume in 2 minutes instead of 30.
+- **TODO.md and TODO.html are two hand-maintained views.** When updating `TODO.md` at session end, update `TODO.html` with the same facts in the same commit. They legitimately differ in presentation (TODO.html is a styled dashboard view; TODO.md is the full reference) but must agree on facts: main HEAD, tag, test count, session-note link, the open-issues list. Drift was caught in session 7 after asymmetric mid-flight edits; no automation in place today (considered but rejected — see that session's notes).
 
 ---
 

@@ -1,18 +1,23 @@
 # Sonar — TODO
 
-## Resume Here (last updated 2026-04-18, end of session 6)
+## Resume Here (last updated 2026-04-20, end of session 7)
 
-**`main` HEAD** = `c305e0b` (release 0.6.0). **Tag:** `v0.6.0`. **Tests:** 113
-backend pass + 4 skipped, 14/14 frontend, all CI green incl. E2E Playwright.
-Working tree clean; everything pushed.
+**`main` HEAD** = `6cfa360`. **Tests:** 129 backend pass (+ 3 real-OpenAI
+skipped), all CI green incl. E2E Playwright. Working tree clean;
+everything pushed.
 
-**This session (session 6) shipped Phase 2 Backfill.** Full context in
-[`docs/session-notes/2026-04-18-session-6.md`](docs/session-notes/2026-04-18-session-6.md).
+**This session (session 7) was the first live end-to-end dogfood** — and
+it caught that the Phase 2 Backfill trigger endpoint, despite shipping
+with 14 green tests in PR #77, had never been wired to Celery. PR #104
+completed the wiring; PR #103 fixed two Wizard bugs (`max_tokens` →
+`max_completion_tokens` rename on gpt-5.4-mini, top-level-list LLM output
+shape). Full dogfood findings in
+[`docs/session-notes/2026-04-20-session-7.md`](docs/session-notes/2026-04-20-session-7.md).
 
-**Next natural move:** **pause to dogfood** the shipped surface
-(Foundation + Wizard + Dashboard + Backfill closes the full day-one loop).
-Dogfood checklist is at the bottom of the session-6 note. Once dogfood
-findings come back as GitHub issues, triage → fix blockers inline → then
+**Next natural move:** **explore the live dashboard with the 37 backfilled
+posts** (30 scored, 8 matching at the dogfood-lowered
+`matching_threshold=0.30`), then fix issue #105 (`relationship_score`
+default fallback bug — blocks #106 threshold calibration). After that,
 start **Phase 2 Discovery** (Ring 3 clustering + weekly digest) via
 `superpowers:brainstorming` on `docs/phase-2/design.md §4.4`.
 
@@ -36,7 +41,7 @@ Ingest pipeline, capability profile extraction, signal matching, scoring, alerts
 | **Foundation** | ✅ Shipped (PR #10) | Migration 002, 4 new ORM models, Ring 1/2 matchers, pipeline refactor, scorer keyword bonus, one-shot backfill script. |
 | **Wizard** | ✅ Shipped session 4 (PRs #64 + #68 + #70) | 5-step Signal Configuration Wizard at `/signals/setup`. Backend: `POST /workspace/signals/propose` + `/confirm`, `signal_proposal_events` telemetry, `app/prompts/propose_signals.py` v1 with idempotency + role-separation defense. |
 | **Dashboard** | ✅ Shipped session 5 (PR #73) | Ranked People List at `/dashboard`. `incremental_trending` Celery task keeps `person_signal_summary` fresh within ~100 ms/post. 30s polling + tab-visibility pause + instant refetch on filter change. Heatmap + Trending Topics sections deferred. |
-| **Backfill** | ✅ Shipped session 6 (PR #77) | Day-One Backfill. Extension captures connections → bulk upsert → Celery task runs 1st-degree Apify scrape (200 × 60 days, ~$0.40/ws) → posts flow through pipeline → completion email. Dashboard banner polls status at 5s. 2nd-degree deferred — research in issue #76. |
+| **Backfill** | ✅ Shipped session 6 (PR #77), wiring completed session 7 (PR #104) | Day-One Backfill. Extension captures connections → bulk upsert → Celery task runs 1st-degree Apify scrape (200 × 60 days, ~$0.40/ws) → posts flow through pipeline → completion email. Dashboard banner polls status at 5s. Session 7 dogfood discovered the trigger endpoint had never been wired to Celery (PR #104 fixed) and surfaced DOM / CORS / URL-normalization bugs along the end-to-end path. 2nd-degree deferred — research in issue #76. |
 | **Discovery** | ⬜ Not started | Ring 3 nightly HDBSCAN clustering for emerging topics + Weekly Digest Email. Most experimental — best built last when there's real data. No plan yet; needs `superpowers:brainstorming` first. |
 
 ### Phase 3 — ⬜ TBD (no design yet)
@@ -94,6 +99,25 @@ After Phase 2 fully ships: run `superpowers:brainstorming` with "scope Phase 3 o
 
 ## Open issues
 
+### Blockers on matching quality (from session 7 dogfood)
+
+- **#105** — `relationship_score` returns 0.5 default instead of 0.9 for
+  degree=1 connections. Scorer isn't reading `Connection.degree`. Fix this
+  BEFORE #106 so calibration runs against correct scorer output.
+- **#106** — `matching_threshold` calibration: build golden eval dataset +
+  ROC analysis. The 0.72 default was never empirically tuned. Blocked on
+  #105.
+
+### Hardening (from session 7 dogfood)
+
+- **#107** — CORS hardening: route extension fetches through service
+  worker, drop linkedin.com origin. Current CORS allows linkedin.com
+  scripts to POST to `/auth/token` and read the response.
+- **#108** — Apify API token leaks into worker logs (passed as URL query
+  param). Move to `Authorization` header.
+
+### Pre-launch
+
 - **#80** — Pre-launch: verify Resend sender domain before first customer email
 - **#74** — Dashboard P2/P3 polish nits from PR #73
 - **#69** — Wizard /confirm P3 polish nits from PR #68
@@ -117,7 +141,7 @@ After Phase 2 fully ships: run `superpowers:brainstorming` with "scope Phase 3 o
 cd ~/Downloads/Misc/projects/sonar
 docker compose up -d postgres redis api
 docker compose exec -T api alembic upgrade head
-docker compose exec -T api pytest -q       # expect 113 passing + 4 skipped
+docker compose exec -T api pytest -q       # expect 129 passing + 3 skipped
 
 claude    # launch Claude Code from inside the Sonar dir so per-project memory loads
 ```

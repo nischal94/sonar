@@ -430,13 +430,13 @@
 <div class="wrap">
 
   <p class="eyebrow">Sonar · Project TODO</p>
-  <h1>Paused to dogfood.</h1>
-  <p class="sub">Phase 2 is 4 of 5 slices done. The full day-one loop works. Before shipping Discovery, use the product for 3–5 days and let the issue list write itself.</p>
+  <h1>First dogfood done. Fix matching quality, then ship Discovery.</h1>
+  <p class="sub">Session 7 was the first real end-to-end run. It caught that Backfill's trigger endpoint had never been wired to Celery despite shipping green tests, plus 6 other bugs along the extension → backend → Apify path. All fixed in PRs #103 and #104. The remaining quality gap is the scorer's relationship-score default (#105) which blocks threshold calibration (#106).</p>
 
   <section class="stats">
     <div class="stat">
       <p class="stat-label">Main HEAD</p>
-      <p class="stat-value">c305e0b</p>
+      <p class="stat-value">6cfa360</p>
     </div>
     <div class="stat">
       <p class="stat-label">Latest tag</p>
@@ -444,7 +444,7 @@
     </div>
     <div class="stat">
       <p class="stat-label">Tests</p>
-      <p class="stat-value ok">113 / 113</p>
+      <p class="stat-value ok">129 / 129</p>
     </div>
     <div class="stat">
       <p class="stat-label">CI</p>
@@ -455,14 +455,14 @@
   <!-- HERO: next action -->
   <section class="hero">
     <span class="pill info">Next action</span>
-    <h3 style="margin-top:10px">Dogfood the shipped surface</h3>
-    <p>Install the extension on your real LinkedIn account, complete the Wizard on yourself, run one real Backfill, and live with the dashboard for 3–5 days. File a GitHub issue per real bug. Then triage and ship Discovery.</p>
-    <p class="tight" style="margin-top:10px">Full checklist:
-      <a href="docs/session-notes/2026-04-18-session-6.md">docs/session-notes/2026-04-18-session-6.md</a> (bottom of the file)
+    <h3 style="margin-top:10px">Fix #105, then run threshold calibration (#106)</h3>
+    <p>Scorer hits a 0.5 default on relationship for 1st-degree connections (should be 0.9), surfaced when the dogfood dashboard showed every scored post at uniform 0.5. Once fixed, combined-score ceiling on backfilled posts shifts from 0.77 → 0.89 and the empirically-justified matching threshold becomes discoverable via a golden-eval ROC sweep.</p>
+    <p class="tight" style="margin-top:10px">Dogfood findings in full:
+      <a href="docs/session-notes/2026-04-20-session-7.md">docs/session-notes/2026-04-20-session-7.md</a>
     </p>
     <div class="hero-meta">
-      <span>✅ No blockers — all dogfood prereqs shipped</span>
-      <span>💰 ~$1.50 / Backfill run</span>
+      <span>🐛 #105 (blocks #106) → 🎯 #106 calibration → 🧭 Phase 2 Discovery</span>
+      <span>💰 ~$0.09 / Backfill run at dogfood caps ($1.50 at prod caps)</span>
     </div>
   </section>
 
@@ -500,7 +500,7 @@
       <tr>
         <td class="slice">Backfill</td>
         <td><span class="pill ok">Shipped</span></td>
-        <td class="desc">Day-One Backfill — extension captures connections, 1st-degree Apify scrape (200 × 60 days, ~$0.40/ws), completion email, dashboard banner polls at 5s. 2nd-degree deferred. <code>PR #77</code></td>
+        <td class="desc">Day-One Backfill — extension captures connections, 1st-degree Apify scrape (200 × 60 days, ~$0.40/ws), completion email, dashboard banner polls at 5s. 2nd-degree deferred. Session 7 dogfood discovered the trigger endpoint had never been wired to Celery despite green tests in PR #77; <code>PR #104</code> fixed plus several adjacent bugs. <code>PR #77</code> + <code>PR #104</code></td>
       </tr>
       <tr>
         <td class="slice">Discovery</td>
@@ -611,6 +611,46 @@
       </tr>
     </thead>
     <tbody>
+      <tr>
+        <td class="issue-num"><a href="https://github.com/nischal94/sonar/issues/105">#105</a></td>
+        <td>
+          <div class="issue-title"><code>relationship_score</code> returns 0.5 default instead of 0.9 for degree=1</div>
+          <div class="issue-note">Surfaced in session 7 dogfood — every scored backfill post had uniform 0.5. Scorer isn't reading <code>Connection.degree</code>. Blocks #106.</div>
+        </td>
+        <td class="center"><span class="pill warn">Quality</span></td>
+        <td class="center"><span class="pill bad">Yes</span></td>
+        <td>Next session (critical path)</td>
+      </tr>
+      <tr>
+        <td class="issue-num"><a href="https://github.com/nischal94/sonar/issues/106">#106</a></td>
+        <td>
+          <div class="issue-title"><code>matching_threshold</code> calibration via golden eval dataset + ROC</div>
+          <div class="issue-note">0.72 default was never empirically tuned. Build labeled dataset, run ROC sweep, pick threshold at precision/recall elbow. Blocked on #105.</div>
+        </td>
+        <td class="center"><span class="pill warn">Quality</span></td>
+        <td class="center"><span class="pill bad">Yes</span></td>
+        <td>After #105</td>
+      </tr>
+      <tr>
+        <td class="issue-num"><a href="https://github.com/nischal94/sonar/issues/107">#107</a></td>
+        <td>
+          <div class="issue-title">CORS hardening: route extension fetches through service worker</div>
+          <div class="issue-note">Current CORS allows linkedin.com scripts to POST <code>/auth/token</code> and read response. Dogfood expedient; tighten before external users.</div>
+        </td>
+        <td class="center"><span class="pill neutral">No</span></td>
+        <td class="center"><span class="pill bad">Yes</span></td>
+        <td>Before first external user</td>
+      </tr>
+      <tr>
+        <td class="issue-num"><a href="https://github.com/nischal94/sonar/issues/108">#108</a></td>
+        <td>
+          <div class="issue-title">Apify token leaks into worker logs (URL query param)</div>
+          <div class="issue-note">Move to <code>Authorization: Bearer</code> header. httpx's default INFO logging emits the full URL including plaintext token every run.</div>
+        </td>
+        <td class="center"><span class="pill neutral">No</span></td>
+        <td class="center"><span class="pill bad">Yes</span></td>
+        <td>Next time editing apify.py</td>
+      </tr>
       <tr>
         <td class="issue-num"><a href="https://github.com/nischal94/sonar/issues/80">#80</a></td>
         <td>
@@ -726,7 +766,7 @@
     <pre>cd ~/Downloads/Misc/projects/sonar
 docker compose up -d postgres redis api
 docker compose exec -T api alembic upgrade head
-docker compose exec -T api pytest -q       # expect 113 passing + 4 skipped
+docker compose exec -T api pytest -q       # expect 129 passing + 3 skipped
 
 claude    # launch from inside the Sonar dir so per-project memory loads</pre>
     <p style="margin-top:10px; color: var(--ink-soft);">Then ask Claude: <em>"Read TODO.md and the latest <code>docs/session-notes/</code> entry, then tell me the state."</em></p>
@@ -762,7 +802,7 @@ docker compose exec -T api alembic upgrade head
 
   <div class="foot">
     <span>Last updated · session 6 · 2026-04-18</span>
-    <span>Source: <a href="TODO.md">TODO.md</a> · <a href="docs/session-notes/2026-04-18-session-6.md">session note</a></span>
+    <span>Source: <a href="TODO.md">TODO.md</a> · <a href="docs/session-notes/2026-04-20-session-7.md">session note</a></span>
   </div>
 
 </div>
