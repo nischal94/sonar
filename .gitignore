@@ -17,6 +17,10 @@ build/
 htmlcov/
 .coverage
 
+# Celery beat file-based scheduler checkpoint (per-minute runtime state,
+# should never be committed).
+celerybeat-schedule
+
 # Node / Extension
 node_modules/
 dist/

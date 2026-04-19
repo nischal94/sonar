@@ -11,7 +11,8 @@ profile-posts (no cookies, $1.50/1k posts, clean postedLimitDate filter).
 
 from __future__ import annotations
 from datetime import datetime, timedelta, timezone
-from typing import Protocol
+from typing import Protocol, runtime_checkable
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 from pydantic import BaseModel
@@ -43,7 +44,12 @@ class ApifyProfilePost(BaseModel):
     share_count: int = 0
 
 
+@runtime_checkable
 class ApifyService(Protocol):
+    """@runtime_checkable so tests can isinstance-check RealApifyService against
+    the Protocol when a real APIFY_API_TOKEN is configured. Protocol conformance
+    is structural — the decorator just enables the isinstance() check."""
+
     async def scrape_profile_posts(
         self, profile_urls: list[str], days: int
     ) -> list[ApifyProfilePost]: ...
@@ -105,7 +111,20 @@ class RealApifyService:
         """
         try:
             author = item.get("author") or {}
-            profile_url = author.get("linkedinUrl") or author.get("profileUrl")
+            raw_profile_url = author.get("linkedinUrl") or author.get("profileUrl")
+            # Apify returns profile URLs with tracking query params
+            # (e.g. ?miniProfileUrn=urn%3Ali%3Afsd_profile%3A...), but the
+            # extension scrapes and stores the canonical form
+            # https://www.linkedin.com/in/<slug> (no query, no trailing
+            # slash). Normalize here so the worker's conn_by_url.get()
+            # lookup in run_day_one_backfill can match them.
+            profile_url = None
+            if raw_profile_url:
+                parsed = urlparse(raw_profile_url)
+                stripped_path = parsed.path.rstrip("/")
+                profile_url = urlunparse(
+                    (parsed.scheme, parsed.netloc, stripped_path, "", "", "")
+                )
             post_id = item.get("id")
 
             # postedAt may be a dict ({timestamp, date, relative}) OR a bare

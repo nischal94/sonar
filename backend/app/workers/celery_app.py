@@ -13,7 +13,8 @@ celery_app = Celery(
         "app.workers.pipeline",
         "app.jobs.public_poller",
         "app.jobs.digest_sender",
-    ]
+        "app.jobs.day_one_backfill_task",
+    ],
 )
 
 celery_app.conf.update(
@@ -31,5 +32,5 @@ celery_app.conf.update(
             "task": "app.jobs.digest_sender.send_digests",
             "schedule": 3600.0,  # every hour
         },
-    }
+    },
 )

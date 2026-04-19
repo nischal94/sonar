@@ -33,7 +33,20 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_handler)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite dev server
+    allow_origins=[
+        "http://localhost:5173",  # Vite dev server
+        # Content scripts on linkedin.com fetch with Origin: https://www.linkedin.com
+        # (MV3 content scripts share the page's network origin, not the extension's).
+        # Safe because /extension/* endpoints still require the Bearer token held
+        # only in chrome.storage.local, inaccessible from page-world scripts. Prod
+        # should route these calls through the service worker (chrome-extension
+        # origin already allowed via allow_origin_regex below) — tracked as a
+        # hardening follow-up.
+        "https://www.linkedin.com",
+    ],
+    # Chrome extensions send requests from chrome-extension://<id> — the id is
+    # per-install and unpredictable, so we match the scheme with a regex.
+    allow_origin_regex=r"^chrome-extension://[a-z0-9]+$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
