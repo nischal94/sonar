@@ -66,15 +66,20 @@ async def test_propose_signals_prompt_produces_valid_shape(inputs):
             s = s[:-3]
     payload = json.loads(s.strip())
 
-    # Mirror the router's shape tolerance: accept either a top-level list
-    # `[{...}]` or the documented `{"signals": [...]}` dict form. gpt-5.4-mini
-    # emits both shapes depending on the call. Long-term fix is Structured
-    # Outputs via response_format=json_schema; tracked in followup.
+    # Mirror the router's shape tolerance EXACTLY: three-way branch that
+    # accepts a top-level list `[{...}]`, the documented `{"signals": [...]}`
+    # dict form, OR fails loudly on a scalar/None. gpt-5.4-mini emits both
+    # valid shapes depending on the call. Keeping this in lockstep with
+    # app/routers/signals.py::propose_signals means a future scalar-output
+    # regression fails with a clear message here, same as in production.
+    # Long-term fix is Structured Outputs via response_format=json_schema;
+    # tracked in followup.
     if isinstance(payload, list):
         signals = payload
-    else:
-        assert "signals" in payload
+    elif isinstance(payload, dict):
         signals = payload["signals"]
+    else:
+        raise AssertionError(f"unexpected LLM output type: {type(payload).__name__}")
     assert 8 <= len(signals) <= 10, f"expected 8-10 signals, got {len(signals)}"
 
     phrases_seen = set()
