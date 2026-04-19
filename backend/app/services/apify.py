@@ -11,7 +11,8 @@ profile-posts (no cookies, $1.50/1k posts, clean postedLimitDate filter).
 
 from __future__ import annotations
 from datetime import datetime, timedelta, timezone
-from typing import Protocol
+from typing import Protocol, runtime_checkable
+from urllib.parse import urlparse, urlunparse
 
 import httpx
 from pydantic import BaseModel
@@ -24,6 +25,37 @@ from app.config import get_settings
 # during dogfood. Revert to 10 before first customer backfill
 # (tracked in issue #81).
 MAX_POSTS_PER_PROFILE = 3
+
+
+def canonicalize_profile_url(url: str | None) -> str | None:
+    """Canonical form used as the join key between the extension-captured
+    Connection.profile_url and posts returned by Apify.
+
+    Normalizes three axes:
+    - scheme + netloc lowercased (e.g. https://LinkedIn.com → https://linkedin.com).
+      urllib.parse does NOT do this automatically; JS's `new URL(...).origin`
+      does. Without this symmetry the join silently drops posts when Apify
+      returns a redirect-normalized host with different case.
+    - trailing slash stripped from the path.
+    - query, params, fragment dropped (Apify returns `?miniProfileUrn=urn%3A...`
+      tracking params; the extension stores clean `/in/<slug>`).
+
+    Returns None for falsy input so callers can pass Apify fields straight
+    through without a second None check.
+    """
+    if not url:
+        return None
+    parsed = urlparse(url)
+    return urlunparse(
+        (
+            parsed.scheme.lower(),
+            parsed.netloc.lower(),
+            parsed.path.rstrip("/"),
+            "",
+            "",
+            "",
+        )
+    )
 
 
 class ApifyProfilePost(BaseModel):
@@ -43,7 +75,12 @@ class ApifyProfilePost(BaseModel):
     share_count: int = 0
 
 
+@runtime_checkable
 class ApifyService(Protocol):
+    """@runtime_checkable so tests can isinstance-check RealApifyService against
+    the Protocol when a real APIFY_API_TOKEN is configured. Protocol conformance
+    is structural — the decorator just enables the isinstance() check."""
+
     async def scrape_profile_posts(
         self, profile_urls: list[str], days: int
     ) -> list[ApifyProfilePost]: ...
@@ -105,7 +142,8 @@ class RealApifyService:
         """
         try:
             author = item.get("author") or {}
-            profile_url = author.get("linkedinUrl") or author.get("profileUrl")
+            raw_profile_url = author.get("linkedinUrl") or author.get("profileUrl")
+            profile_url = canonicalize_profile_url(raw_profile_url)
             post_id = item.get("id")
 
             # postedAt may be a dict ({timestamp, date, relative}) OR a bare

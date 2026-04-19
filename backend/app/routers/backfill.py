@@ -106,17 +106,18 @@ async def backfill_trigger(
         )
 
     # Mark started now to prevent race with a second trigger before the
-    # Celery task picks up.
+    # Celery task picks up. run_day_one_backfill keys idempotency on
+    # backfill_completed_at (not backfill_used), so the worker will still
+    # run this job even though backfill_used is already True here.
     now = datetime.now(timezone.utc)
     ws.backfill_used = True
     ws.backfill_started_at = now
     await db.commit()
 
-    # In prod: enqueue Celery task. For MVP test visibility we return a
-    # synthesized task_id — the actual Celery dispatch is wired in later
-    # tasks once end-to-end infra is in place.
-    task_id = f"backfill-{current_user.workspace_id}-{int(now.timestamp())}"
-    return BackfillTriggerResponse(task_id=task_id, backfill_started_at=now)
+    from app.jobs.day_one_backfill_task import run_day_one_backfill_task
+
+    async_result = run_day_one_backfill_task.delay(str(current_user.workspace_id))
+    return BackfillTriggerResponse(task_id=async_result.id, backfill_started_at=now)
 
 
 @router.get("/workspace/backfill/status", response_model=BackfillStatusResponse)

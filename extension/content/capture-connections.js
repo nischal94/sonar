@@ -12,14 +12,14 @@
   }
 
   function extractConnectionsFromDOM() {
-    // LinkedIn's connections page uses mn-connection-card containers.
-    // Selectors here are brittle by definition — when LinkedIn changes DOM,
-    // this script's telemetry will flag the mismatch.
-    const rows = document.querySelectorAll(".mn-connection-card, [data-chameleon-result-urn]");
-    const out = [];
-    for (const row of rows) {
-      const link = row.querySelector('a[href*="/in/"]');
-      if (!link) continue;
+    // LinkedIn's connections page keeps rebuilding its class names (tested
+    // 2026-04-20: old .mn-connection-card and [data-chameleon-result-urn]
+    // both gone). Instead of chasing class changes, anchor on the stable
+    // fact that every connection has an /in/<slug> profile link, then
+    // dedupe and walk up for headline text.
+    const links = document.querySelectorAll('a[href*="/in/"]');
+    const byId = new Map();
+    for (const link of links) {
       let profile_url;
       try {
         const u = new URL(link.href);
@@ -28,21 +28,60 @@
         continue;
       }
       const linkedin_id = profile_url.split("/in/")[1];
-      if (!linkedin_id) continue;
-      const nameEl = row.querySelector(".mn-connection-card__name, [data-test-app-aware-link] span");
-      const name = nameEl?.textContent?.trim() || "";
-      if (!name) continue;
-      const headlineEl = row.querySelector(".mn-connection-card__occupation");
-      const headline = headlineEl?.textContent?.trim() || null;
-      out.push({
-        linkedin_id,
-        name,
-        headline,
+      if (!linkedin_id || linkedin_id.includes("/")) continue;
+      const text = (link.textContent || "").trim().replace(/\s+/g, " ");
+      const existing = byId.get(linkedin_id);
+      // Per connection LinkedIn renders 2-3 overlapping links (photo wrapper
+      // with empty text + name link with the name). Skip the empty-text
+      // one if we already captured the name, but don't drop the entry.
+      if (existing && existing.name && !text) continue;
+      const name = text || (existing && existing.name) || "";
+      if (!name || name.length < 2) continue;
+
+      // Walk up to 5 ancestors, collecting the first plausible headline
+      // from adjacent <span>/<p> text. Skip UI labels and connection-date
+      // footers.
+      let headline = null;
+      let ancestor = link.parentElement;
+      const skip = /^(Message|Follow|Remove Connection|More|Connected on|Pending)/;
+      for (let i = 0; i < 5 && ancestor && !headline; i++) {
+        const candidates = ancestor.querySelectorAll("span, p");
+        for (const c of candidates) {
+          const t = (c.textContent || "").trim().replace(/\s+/g, " ");
+          if (
+            t &&
+            t !== name &&
+            t.length >= 5 &&
+            t.length <= 200 &&
+            !skip.test(t)
+          ) {
+            headline = t;
+            break;
+          }
+        }
+        ancestor = ancestor.parentElement;
+      }
+
+      // Clamp to backend Pydantic limits (backend/app/schemas/backfill.py):
+      // name max 200, headline max 500, profile_url max 500. LinkedIn's
+      // textContent concatenates the name <span> with the headline <span>
+      // into one string (e.g. "Debayan RoyProduct Marketing | Welingkar
+      // | PGDM'24 | IOCL"), and some users' combined text exceeds 200.
+      // Truncate rather than drop the row — linkedin_id + profile_url
+      // remain clean and are what the backend dedupes/joins on.
+      const clampedName = name.slice(0, 200);
+      const clampedHeadline = headline ? headline.slice(0, 500) : null;
+      const clampedUrl = profile_url.slice(0, 500);
+
+      byId.set(linkedin_id, {
+        linkedin_id: linkedin_id.slice(0, 200),
+        name: clampedName,
+        headline: clampedHeadline,
         company: null,
-        profile_url,
+        profile_url: clampedUrl,
       });
     }
-    return out;
+    return Array.from(byId.values());
   }
 
   async function scrollAndCollect(maxScrolls = 30) {
