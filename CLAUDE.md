@@ -153,8 +153,42 @@ Every Phase 2+ contribution aims to meet these. When skipping something, call it
 - **GitHub Issues for every bug, tech-debt item, and follow-up.** Not in commit messages, not in CLAUDE.md prose. In issues, with labels.
 - **Conventional Commits** (`feat(scope): ...`, `fix(scope): ...`). Commit messages explain the *why*, not the *what*.
 - **Issue and PR templates** in `.github/` — minimal bug template + minimal PR template.
-- **Session notes** in `docs/session-notes/YYYY-MM-DD.md` at the end of substantive work sessions, so the next session can resume in 2 minutes instead of 30.
-- **TODO.md and TODO.html are two hand-maintained views.** When updating `TODO.md` at session end, update `TODO.html` with the same facts in the same commit. They legitimately differ in presentation (TODO.html is a styled dashboard view; TODO.md is the full reference) but must agree on facts: main HEAD, tag, test count, session-note link, the open-issues list. Drift was caught in session 7 after asymmetric mid-flight edits; no automation in place today (considered but rejected — see that session's notes).
+- **TODO.md is the single source of truth for project status and next-session work.** Read it top-to-bottom to resume. Required section order: Next Session Action Plan → Phase status → Reference processes → Open issues → Orthogonal cleanup → Session log → Resume / setup commands. TODO.html is a styled mirror that must be updated in the same commit with the same facts (main HEAD, tests, CI, action items, issues, session log entries).
+
+- **`docs/session-notes/` is retired (2026-04-20, session 7).** Files for sessions 1–7 are preserved as historical artifacts, but no new entries are added. Long-form forensics have better homes:
+  - **PR descriptions** for the "why this fix was needed" context (GitHub preserves them, searchable from the commit).
+  - **Commit message bodies** for per-commit reasoning.
+  - **Issue bodies** for "why this matters" context on filed follow-ups.
+  - **CLAUDE.md Lessons Learned** for durable rules codified from a session's discovery.
+  - **TODO.md Session log** (below) for the terse chronological thread — 3-5 bullets per session, what merged, what was filed, any structural changes.
+
+- **TODO.md's Next Session Action Plan section is a numbered ordered list, not a prose narrative.** Rule codified in session 7 after the next-session plan existed only in the chat transcript (which vanishes) while TODO.md held a narrative paragraph. The next session must be able to read TODO.md and execute item 1 without reconstructing context from git log or chat.
+
+  **Required structure for the Next Session Action Plan section:**
+
+  ```markdown
+  ## Next Session Action Plan (last rewritten YYYY-MM-DD, end of session N)
+
+  **State at resume:** main HEAD = <sha>. Tests: <N passing + M skipped>. CI: <status>. Working tree: <clean/dirty>.
+
+  ### 1. <emoji> <short action title>
+
+  **What:** concrete step the next session executes.
+  **Why now:** rationale for this being the next thing, not a different item.
+  **Blocks:** what this blocks downstream / what blocks this upstream.
+  **Effort:** rough time estimate.
+
+  ### 2. ... (same template)
+  ```
+
+  **Template rules:**
+  - Numbered, in execution order, top-down. Item 1 is literally the first thing to do.
+  - Each item has all four fields (What / Why now / Blocks / Effort). No prose-only items.
+  - Rewritten end-to-end every session — not patched, not appended. If an item was completed, delete it; if still relevant, re-evaluate its position.
+  - No "Priority A / Priority B / Priority C" static taxonomy — those are buckets that stale quietly. Ordered numbered list only.
+  - Pre-launch gaps that are NOT next-session-eligible (e.g. PII/GDPR endpoints, observability baseline) go in a dedicated lower-priority item with an explicit "not next-session work" label, so they're tracked without polluting the active plan.
+
+- **Session log section: append the new session's entry, don't rewrite.** At session end, prepend a new `### Session N — YYYY-MM-DD — <title>` block to the top of the Session log (newest first). 3-5 bullets max. Pointers (PR links, issue links) over narrative. If the session genuinely produced a longer forensic that doesn't fit, write it into the relevant PR description or a CLAUDE.md Lessons Learned entry, not a separate file.
 
 ---
 

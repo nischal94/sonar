@@ -1,30 +1,58 @@
-# Sonar — TODO
+# Sonar — Project Status & Plan
 
-## Resume Here (last updated 2026-04-20, end of session 7)
+> **This is the single source of truth for the project.** Read top-to-bottom to resume. Sections below follow a fixed order: Next Session Action Plan → Phase status → Reference processes → Open issues → Orthogonal cleanup → Session log → Resume / setup commands. Older session forensics (`docs/session-notes/`) are preserved as historical artifacts but new session records go in the Session log section below, not there.
 
-**`main` HEAD** = `6cfa360`. **Tests:** 129 backend pass (+ 3 real-OpenAI
-skipped), all CI green incl. E2E Playwright. Working tree clean;
-everything pushed.
+---
 
-**This session (session 7) was the first live end-to-end dogfood** — and
-it caught that the Phase 2 Backfill trigger endpoint, despite shipping
-with 14 green tests in PR #77, had never been wired to Celery. PR #104
-completed the wiring; PR #103 fixed two Wizard bugs (`max_tokens` →
-`max_completion_tokens` rename on gpt-5.4-mini, top-level-list LLM output
-shape). Full dogfood findings in
-[`docs/session-notes/2026-04-20-session-7.md`](docs/session-notes/2026-04-20-session-7.md).
+## Next Session Action Plan (last rewritten 2026-04-20, end of session 7)
 
-**Next natural move:** **explore the live dashboard with the 37 backfilled
-posts** (30 scored, 8 matching at the dogfood-lowered
-`matching_threshold=0.30`), then fix issue #105 (`relationship_score`
-default fallback bug — blocks #106 threshold calibration). After that,
-start **Phase 2 Discovery** (Ring 3 clustering + weekly digest) via
-`superpowers:brainstorming` on `docs/phase-2/design.md §4.4`.
+**State at resume:** `main` HEAD = `af54add` (check with `git log -1`). Tests: 129 backend pass + 3 real-OpenAI skipped. All CI green. Working tree clean.
 
-**History:** prior sessions' details live under
-[`docs/session-notes/`](docs/session-notes/) (session 6 onward) and in git /
-CHANGELOG / the phase-2 decision docs. Don't inline past sessions here —
-the "Resume Here" section is for *next action*, not history.
+### 1. ⏱ Verify the end-to-end loop (5 min — do this FIRST)
+
+**What:** Open `http://localhost:5173`, log in, check the intent-matches pane shows the 8 backfilled posts that crossed `matching_threshold=0.30` on the dogfood workspace.
+**Why now:** It's the only thing left unverified from session 7. All code merged + pushed; only the dashboard render is unseen. If it works, Backfill is truly shipped. If it doesn't, the chain has one more bug before #105 matters.
+**Blocks:** nothing downstream, but unresolved until the dashboard is eyed.
+**Effort:** 5 minutes.
+
+### 2. 🐛 Fix issue #105 — `relationship_score` default fallback bug (BLOCKER)
+
+**What:** Scorer returns `0.5` for every 1st-degree connection instead of the documented `0.9`. Investigate `app/workers/scorer.py` (or wherever scoring lives), locate the default-fallback path, fix to read `Connection.degree`, add a regression test that inserts a degree=1 Connection + Post and asserts `relationship_score ≥ 0.9`.
+**Why now:** Blocks #106 directly — calibration against a broken scorer produces a broken threshold. Also raises combined-score ceiling on backfilled posts from 0.77 → 0.89, which materially improves matching quality for live signals too.
+**Blocks:** #106 (threshold calibration).
+**Effort:** ~1-2 hours. Small isolated fix.
+
+### 3. 🎯 Plan and execute issue #106 — threshold calibration
+
+**What:** Build a golden eval dataset of ~100-200 real LinkedIn posts labeled "IS a buying-intent signal" vs "isn't" against the dogfood workspace's signals. Run the scorer against the set at thresholds 0.2–0.9. Plot precision/recall. Pick the threshold at the elbow (may split live vs. backfill).
+**Why now:** The `0.72` default was never empirically tuned. Live dogfood showed it's unreachable for any post older than 24h. Users deploying with default settings will see empty dashboards.
+**Blocks:** confidence in the product's matching claim. Nothing structural waits on it, but the product is "half-broken by design" until it's done.
+**Effort:** Full session on its own — most uncertainty of any next item. Includes hand-labeling work.
+
+### 4. 🔒 Hardening: issues #107 + #108 (both small, do before first external user)
+
+**#107 — CORS service-worker routing.** Route extension fetches through the background service worker (whose origin is `chrome-extension://<id>`, already allowed). Remove `https://www.linkedin.com` from `app/main.py` `allow_origins`. Closes the `/auth/token` response-read exposure tonight's CORS widening created. **Effort:** ~1 hour.
+
+**#108 — Apify token to Authorization header.** Move from URL query param (`?token=apify_api_...`) to `Authorization: Bearer` header in `app/services/apify.py`. Verify harvestapi accepts header auth. Stops the plaintext-token leak into every worker log line. **Effort:** ~30 minutes.
+
+**Why now:** Both are security-adjacent and small. Best done in one commit before any external user signs up.
+
+### 5. 🧭 Phase 2 Discovery slice (the final Phase 2 slice)
+
+**What:** Ring 3 nightly HDBSCAN clustering for emerging topics + Weekly Digest Email. Per `docs/phase-2/design.md §4.4`.
+**Why now:** After #105 + #106, matching quality is trustworthy enough to build discovery on top of. Before that, clusters would form around noise.
+**Start with:** `superpowers:brainstorming` to scope decisions (which clustering approach, digest template, schedule, opt-in flow).
+**Effort:** Multi-session. Most uncertainty of any Phase 2 slice.
+
+### 6. 🚧 Pre-launch tier (gates before first external paying customer)
+
+Not next-session work, but tracked so it doesn't surprise:
+- **PII/GDPR:** data retention policy + export + deletion endpoints. Not started.
+- **Observability:** structlog + Sentry + Prometheus + split `/health/live` vs `/ready` + DB backup/restore drill. Not started.
+- **LLM eval harness:** activates once `signal_proposal_events` has ~100+ real completions.
+- **Frontend dep bumps:** React 18→19, Vite 6→8, react-router-dom 6→7. Tracked in #40. Requires human in browser — plan a dedicated half-day.
+
+None of these block session-8 work; all gate first external customer.
 
 ---
 
@@ -50,35 +78,9 @@ Three rough directions in `CLAUDE.md`: real-time alerts, CRM integrations, team 
 
 ---
 
-## Next steps in priority order
+## Reference processes (not in the action plan above because they need their own runbook)
 
-### Priority A — Dogfood the current state (recommended)
-
-See the checklist at the bottom of
-[`docs/session-notes/2026-04-18-session-6.md`](docs/session-notes/2026-04-18-session-6.md). Triage findings to GitHub issues; fix anything blocking the "day-one magic moment" inline; then ship Discovery.
-
-**Effort:** 3–5 days of lived-in use, then a focused triage session.
-
-### Priority B — Phase 2 Discovery slice
-
-Ring 3 nightly HDBSCAN clustering + Weekly Digest Email. Needs brainstorming + writing-plans before implementation. Should follow dogfood so the clustering is validated against real production data, not synthetic posts.
-
-**How to start:** `superpowers:brainstorming` with the prompt "scope Phase 2 Discovery — Ring 3 nightly clustering for emerging topics + Weekly Digest Email per `docs/phase-2/design.md §4.4`."
-
-**Effort:** multi-session. Most uncertainty of any Phase 2 slice.
-
-### Priority C — Pre-launch gaps (required before production)
-
-| Gap | Status | Issue / note |
-|---|---|---|
-| Rate limiting | ✅ Shipped (`/auth/token` PR #61, `/workspace/register` PR #67) | Deploy precondition `--proxy-headers` tracked in #62 |
-| PII / GDPR | ❌ Not started | Data retention policy + export + deletion endpoints |
-| Observability baseline | ❌ Not started | structlog + Sentry + Prometheus + split `/health/live` vs `/ready` + DB backup/restore drill |
-| LLM eval datasets | ⏳ Harness in spirit via structural CI gate | Activates once `signal_proposal_events` has ~100+ real completions |
-
-These should be promoted into the numbered Priority list before Discovery expands the LLM + data surface area further.
-
-### Priority D — Frontend dep bumps (5 coupled, REQUIRES HUMAN IN BROWSER)
+### Frontend dep bumps — coordinated 5-package upgrade (issue #40)
 
 React 18→19, react-dom, react-router-dom 6→7, Vite 6→8, @vitejs/plugin-react 4→6 are tightly coupled and must be evaluated as **one coordinated upgrade**. Per `CLAUDE.md` Lessons Learned: frontend dep bumps require a human running through every route in the browser, not just `npm run build`.
 
@@ -89,11 +91,9 @@ React 18→19, react-dom, react-router-dom 6→7, Vite 6→8, @vitejs/plugin-rea
 4. `docker compose up -d frontend`; manually test every route (register, login, profile/extract, signals/setup, dashboard, alerts, channels)
 5. Fix breakage as it surfaces; commit, push, open PR with "browser-tested" note
 
-**Tracked:** issue #40. **Effort:** half-day to full day.
+### Phase 3 brainstorming (after all Phase 2 slices ship)
 
-### Priority E — Phase 3 brainstorming
-
-After Phase 2 fully ships: run `superpowers:brainstorming` with "scope Phase 3 of Sonar — real-time alerts, CRM integrations, team features, or something else." Produces `docs/phase-3/design.md`.
+Run `superpowers:brainstorming` with "scope Phase 3 of Sonar — real-time alerts, CRM integrations, team features, or something else." Produces `docs/phase-3/design.md`.
 
 ---
 
@@ -135,6 +135,27 @@ After Phase 2 fully ships: run `superpowers:brainstorming` with "scope Phase 3 o
 
 ---
 
+## Session log (newest first, terse; full forensics live in git commits + PR descriptions)
+
+### Session 7 — 2026-04-20 — First live dogfood + Backfill Celery wiring + doc consolidation
+
+- **Merged:** PR #103 (Wizard: `max_tokens` → `max_completion_tokens` rename on gpt-5.4-mini; tolerate top-level-list LLM output). PR #104 (Backfill: wired day_one_backfill Celery task — the trigger endpoint had never been wired despite shipping with green tests; plus CORS widening for linkedin.com origin, Apify `profile_url` canonicalization, LinkedIn DOM-selector rewrite, Pydantic length truncation).
+- **Filed:** #105 (scorer `relationship_score` returns 0.5 default instead of 0.9), #106 (`matching_threshold` calibration via golden eval dataset), #107 (CORS service-worker routing), #108 (Apify token in URL query param).
+- **Structural doc change:** TODO.md is now the single source of truth with a rigid section order (see header). Session records go in this Session log, not `docs/session-notes/` (which is preserved as history for sessions 1–7 but not added to). TODO.html mirrors TODO.md. CLAUDE.md Process discipline updated with the required template for the Next Session Action Plan.
+- **Longer forensic for this session** preserved as [`docs/session-notes/2026-04-20-session-7.md`](docs/session-notes/2026-04-20-session-7.md) — final entry in that directory.
+
+### Session 6 — 2026-04-18 — Phase 2 Backfill slice shipped
+
+- Merged PR #77 (Backfill) + PR #75 (release 0.6.0, tag `v0.6.0`).
+- First external-HTTP integration pattern (`Protocol + Real + Fake + get_{service}`) canonicalized in `app/services/apify.py`.
+- Forensic: [`docs/session-notes/2026-04-18-session-6.md`](docs/session-notes/2026-04-18-session-6.md).
+
+### Sessions 1–5 — Phase 1 complete + Phase 2 Foundation, Wizard, Dashboard
+
+- Foundation (PR #10), Wizard (PRs #64, #68, #70), Dashboard (PR #73). Details in commit log + PR descriptions. No session-note files for sessions 1–5 under the previous convention.
+
+---
+
 ## How to resume in a new Claude Code session
 
 ```bash
@@ -146,7 +167,7 @@ docker compose exec -T api pytest -q       # expect 129 passing + 3 skipped
 claude    # launch Claude Code from inside the Sonar dir so per-project memory loads
 ```
 
-Then ask Claude: **"Read TODO.md and the latest `docs/session-notes/` entry, then tell me the state."**
+Then ask Claude: **"Read TODO.md, then tell me the state and execute item 1 of the Next Session Action Plan."**
 
 ---
 

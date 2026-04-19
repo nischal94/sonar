@@ -800,9 +800,38 @@ docker compose exec -T api alembic upgrade head
     </ul>
   </details>
 
+  <!-- SESSION LOG -->
+  <h2>Session log</h2>
+  <p class="tight" style="color: var(--ink-soft); margin-bottom: 16px;">Newest first; terse. Full forensics live in git commit messages + PR descriptions. Files under <code>docs/session-notes/</code> (sessions 1–7) are historical — no new entries are added there.</p>
+
+  <details open>
+    <summary><strong>Session 7 · 2026-04-20</strong> — First live dogfood + Backfill Celery wiring + doc consolidation</summary>
+    <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
+      <li><strong>Merged:</strong> <a href="https://github.com/nischal94/sonar/pull/103">PR #103</a> (Wizard: gpt-5.4-mini param rename + list-top-level LLM output tolerance), <a href="https://github.com/nischal94/sonar/pull/104">PR #104</a> (Backfill: wired day_one_backfill Celery task — previously shipped with green tests but never actually dispatched; plus CORS, Apify URL canonicalization, scraper rewrite, Pydantic truncation).</li>
+      <li><strong>Filed:</strong> <a href="https://github.com/nischal94/sonar/issues/105">#105</a> scorer 0.5 default, <a href="https://github.com/nischal94/sonar/issues/106">#106</a> threshold calibration, <a href="https://github.com/nischal94/sonar/issues/107">#107</a> CORS hardening, <a href="https://github.com/nischal94/sonar/issues/108">#108</a> Apify token leak.</li>
+      <li><strong>Structural:</strong> TODO.md is now the single source of truth with a rigid section order. Session records go in this Session log, not new files under <code>docs/session-notes/</code>. Session 7's full forensic preserved as <a href="docs/session-notes/2026-04-20-session-7.md">the final entry</a> in that directory.</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary><strong>Session 6 · 2026-04-18</strong> — Phase 2 Backfill slice shipped</summary>
+    <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
+      <li>Merged <a href="https://github.com/nischal94/sonar/pull/77">PR #77</a> (Backfill) + <a href="https://github.com/nischal94/sonar/pull/75">PR #75</a> (release 0.6.0, tag <code>v0.6.0</code>).</li>
+      <li>First external-HTTP integration pattern (<code>Protocol + Real + Fake + get_{service}</code>) canonicalized in <code>app/services/apify.py</code>.</li>
+      <li>Forensic: <a href="docs/session-notes/2026-04-18-session-6.md">docs/session-notes/2026-04-18-session-6.md</a>.</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary><strong>Sessions 1–5</strong> — Phase 1 complete + Phase 2 Foundation, Wizard, Dashboard</summary>
+    <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
+      <li>Foundation (PR #10), Wizard (PRs #64, #68, #70), Dashboard (PR #73). Details in commit log + PR descriptions. No session-note files for sessions 1–5 under the previous convention.</li>
+    </ul>
+  </details>
+
   <div class="foot">
-    <span>Last updated · session 6 · 2026-04-18</span>
-    <span>Source: <a href="TODO.md">TODO.md</a> · <a href="docs/session-notes/2026-04-20-session-7.md">session note</a></span>
+    <span>Last updated · session 7 · 2026-04-20</span>
+    <span>Source: <a href="TODO.md">TODO.md</a> · mirrors the canonical Markdown version</span>
   </div>
 
 </div>
