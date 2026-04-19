@@ -1,22 +1,20 @@
 version: 2
 
-# FULL grouping: every Dependabot update lands as a grouped PR — never an
-# individual PR. Two groups per ecosystem:
-#   1. <ecosystem>-security  → all vulnerability fixes (urgent)
-#   2. <ecosystem>-versions  → all version bumps including majors
+# 3-group pattern (security + minor-patch + majors-individual):
+#   1. <eco>-security    → all vulnerability fixes (urgent)
+#   2. <eco>-minor-patch → safe semver bumps
+#   3. (majors stay individual — breaking changes deserve isolated review
+#      so a v6→v7 upgrade can't take down a grouped PR's CI and block
+#      the safe patches inside it)
 #
-# Trade-off vs. previous config (which kept majors individual):
-#   + Zero individual Dependabot PRs — true weekly digest
-#   + No "burst" can occur regardless of how many deps are stale
-#   - Major-version diffs share a PR with minor/patch — review more
-#     carefully (read each changelog Dependabot embeds)
+# `open-pull-requests-limit: 2` is a HARD CAP independent of grouping.
+# If the 3-group config ever permits more than 2 PRs per ecosystem, the
+# limit kicks in. Sonar's previous limit of 5 produced a 9-PR burst on
+# first scan — 2 is the new ceiling.
 #
-# `open-pull-requests-limit: 2` provides a HARD CAP independent of
-# grouping. With grouping there should never be more than 2 PRs per
-# ecosystem at once anyway, but this protects against config-drift
-# scenarios.
-#
-# Reference: nischal94/repo-template/docs/SECURITY-OPERATIONS.md §5
+# For dormant repos where per-major review isn't worth the per-PR
+# overhead, switch to FULL grouping (2 groups: security + all-versions).
+# See nischal94/repo-template/docs/SECURITY-OPERATIONS.md §5.
 
 updates:
   # Backend Python dependencies (pyproject.toml). uv.lock is regenerated
@@ -35,9 +33,9 @@ updates:
       pip-security:
         applies-to: security-updates
         patterns: ["*"]
-      pip-versions:
+      pip-minor-patch:
         applies-to: version-updates
-        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # Frontend npm dependencies.
   - package-ecosystem: "npm"
@@ -54,9 +52,9 @@ updates:
       npm-security:
         applies-to: security-updates
         patterns: ["*"]
-      npm-versions:
+      npm-minor-patch:
         applies-to: version-updates
-        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # E2E npm dependencies (Playwright + test deps).
   - package-ecosystem: "npm"
@@ -73,9 +71,9 @@ updates:
       e2e-security:
         applies-to: security-updates
         patterns: ["*"]
-      e2e-versions:
+      e2e-minor-patch:
         applies-to: version-updates
-        patterns: ["*"]
+        update-types: ["minor", "patch"]
 
   # GitHub Actions workflow dependencies.
   - package-ecosystem: "github-actions"
