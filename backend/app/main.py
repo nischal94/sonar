@@ -35,19 +35,33 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",  # Vite dev server
-        # Content scripts on linkedin.com fetch with Origin: https://www.linkedin.com
-        # (MV3 content scripts share the page's network origin, not the extension's).
-        # Safe because /extension/* endpoints still require the Bearer token held
-        # only in chrome.storage.local, inaccessible from page-world scripts. Prod
-        # should route these calls through the service worker (chrome-extension
-        # origin already allowed via allow_origin_regex below) — tracked as a
-        # hardening follow-up.
+        # MV3 content scripts running on linkedin.com fetch with
+        # Origin: https://www.linkedin.com because they share the host page's
+        # network origin, NOT chrome-extension://<id>. Without this, the
+        # day-one scan scraper in extension/content/capture-connections.js
+        # can't POST to /extension/connections/bulk.
+        #
+        # Trade-off this accepts, documented honestly:
+        #   - /extension/* and /workspace/* remain gated by the Bearer token in
+        #     chrome.storage.local, which page-world scripts CANNOT read. Safe.
+        #   - /auth/token (unauthenticated) is now invokable + response-readable
+        #     by any script running on linkedin.com. It's rate-limited at
+        #     5/minute per IP, so brute force is bounded, but a targeted
+        #     phishing script that already has a valid credential could
+        #     harvest a JWT via this path. Acceptable during dogfood; the
+        #     proper fix is routing extension fetches through the service
+        #     worker (which runs under chrome-extension://<id> and hits the
+        #     allow_origin_regex below) so linkedin.com can be removed here.
         "https://www.linkedin.com",
     ],
     # Chrome extensions send requests from chrome-extension://<id> — the id is
-    # per-install and unpredictable, so we match the scheme with a regex.
+    # per-install and unpredictable, so match the scheme with a regex.
     allow_origin_regex=r"^chrome-extension://[a-z0-9]+$",
-    allow_credentials=True,
+    # allow_credentials stays off: we use Authorization: Bearer exclusively
+    # (no cookie sessions on any origin — verified in frontend/src/api/client.ts
+    # and extension/utils/api-client.js). Leaving credentials off prevents any
+    # future accidental cookie-based CSRF path from inheriting this CORS list.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
