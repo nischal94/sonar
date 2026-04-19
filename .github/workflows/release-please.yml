@@ -31,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - id: release
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
         with:
           config-file: .github/release-please-config.json
           manifest-file: .github/.release-please-manifest.json
@@ -47,19 +47,22 @@ jobs:
 
       - if: ${{ steps.release.outputs.release_created }}
         name: Checkout release tag
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ steps.release.outputs.tag_name }}
+          persist-credentials: false
 
       - if: ${{ steps.release.outputs.release_created }}
         name: Package Chrome extension
         run: |
           cd extension
-          zip -r "../sonar-extension-${{ steps.release.outputs.tag_name }}.zip" . -x "*.DS_Store" "*.map"
+          zip -r "../sonar-extension-${STEPS_RELEASE_OUTPUTS_TAG_NAME}.zip" . -x "*.DS_Store" "*.map"
+        env:
+          STEPS_RELEASE_OUTPUTS_TAG_NAME: ${{ steps.release.outputs.tag_name }}
 
       - if: ${{ steps.release.outputs.release_created }}
         name: Generate SBOM (SPDX via syft)
-        uses: anchore/sbom-action@v0
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
         with:
           path: .
           format: spdx-json
@@ -71,10 +74,11 @@ jobs:
         name: Upload assets to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          STEPS_RELEASE_OUTPUTS_TAG_NAME: ${{ steps.release.outputs.tag_name }}
         run: |
-          gh release upload "${{ steps.release.outputs.tag_name }}" \
-            "sonar-extension-${{ steps.release.outputs.tag_name }}.zip" \
-            "sonar-sbom-${{ steps.release.outputs.tag_name }}.spdx.json" \
+          gh release upload "${STEPS_RELEASE_OUTPUTS_TAG_NAME}" \
+            "sonar-extension-${STEPS_RELEASE_OUTPUTS_TAG_NAME}.zip" \
+            "sonar-sbom-${STEPS_RELEASE_OUTPUTS_TAG_NAME}.spdx.json" \
             --clobber
 
       - if: ${{ steps.release.outputs.release_created }}
