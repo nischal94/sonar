@@ -37,4 +37,7 @@ jobs:
           python-version: "3.12"
       - run: pip install bandit[toml]
       - name: Run bandit
-        run: bandit -r backend -ll -x backend/tests
+        # -x excludes: tests (uses assert which bandit flags),
+        # alembic (DBA migrations use raw SQL strings; not a request-path
+        # injection vector — flagged would be false positives by design).
+        run: bandit -r backend -ll -x backend/tests,backend/alembic
