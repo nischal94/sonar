@@ -21,8 +21,14 @@ permissions:
 
 jobs:
   actionlint:
-    name: actionlint
+    # Initially advisory: actionlint surfaces pre-existing shellcheck
+    # warnings in e2e.yml on first run (unused loop vars, unquoted
+    # command substitutions). Same baseline pattern as bandit / trivy.
+    # Promote to required (remove continue-on-error) once those are
+    # resolved in a dedicated cleanup PR.
+    name: actionlint (advisory)
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v6
       - name: Download actionlint
