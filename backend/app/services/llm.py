@@ -44,11 +44,15 @@ class OpenAILLMProvider:
         system: str | None = None,
         max_tokens: int = 2048,
     ) -> str:
+        # OpenAI renamed `max_tokens` → `max_completion_tokens` for the gpt-5+
+        # model generation (including gpt-5.4-mini). The old parameter name is
+        # hard-rejected. Keep the Python kwarg named max_tokens for caller
+        # stability; translate at the API boundary.
         response = await self._client.chat.completions.create(
             model=model,
             messages=_build_messages(prompt, system),
             temperature=0.3,
-            max_tokens=max_tokens,
+            max_completion_tokens=max_tokens,
         )
         return response.choices[0].message.content
 
