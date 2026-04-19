@@ -67,7 +67,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Install uv + Python 3.12
-        uses: astral-sh/setup-uv@v8.0.0
+        uses: astral-sh/setup-uv@v8.1.0
         with:
           python-version: "3.12"
       - name: Install dependencies
@@ -92,7 +92,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
-      - uses: astral-sh/setup-uv@v8.0.0
+      - uses: astral-sh/setup-uv@v8.1.0
         with:
           python-version: "3.12"
       - name: Ruff check (advisory — does not block PRs until baseline is clean)
@@ -155,7 +155,7 @@ jobs:
           format: sarif
           output: trivy-image.sarif
       - name: Upload Trivy image-scan SARIF
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always()
         continue-on-error: true
         with:
