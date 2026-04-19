@@ -125,6 +125,9 @@ jobs:
   docker-backend:
     name: Docker — backend image build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write  # for SARIF upload from Trivy image scan
     steps:
       - uses: actions/checkout@v6
       - uses: docker/setup-buildx-action@v4
@@ -133,6 +136,28 @@ jobs:
         with:
           context: backend
           push: false
+          load: true  # load into local docker so Trivy can scan it
           tags: sonar-backend:ci
           cache-from: type=gha
           cache-to: type=gha,mode=max
+      # Trivy image-CVE scan reuses the artifact already in memory from the
+      # build step above. Advisory while the baseline is established —
+      # SARIF results land in Security tab → Code scanning alerts under
+      # category "trivy-image" so they don't collide with the filesystem
+      # scan run in trivy.yml (category "trivy-fs").
+      - name: Trivy image scan (advisory)
+        uses: aquasecurity/trivy-action@0.35.0
+        continue-on-error: true
+        with:
+          image-ref: sonar-backend:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-image.sarif
+      - name: Upload Trivy image-scan SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        continue-on-error: true
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
