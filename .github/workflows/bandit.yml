@@ -1,0 +1,38 @@
+name: bandit
+
+# Python-specific SAST. Catches issues CodeQL doesn't always flag:
+# - subprocess(shell=True), os.system with user input
+# - hardcoded passwords / SQL string concat
+# - weak crypto (md5, sha1 for security purposes)
+# - assert statements in non-test code (stripped at -O)
+# - yaml.load without SafeLoader
+#
+# Currently advisory while the baseline is established. Promote to a
+# required check via branch protection once the codebase is clean.
+
+on:
+  pull_request:
+    paths:
+      - "backend/**.py"
+      - ".github/workflows/bandit.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**.py"
+
+permissions:
+  contents: read
+
+jobs:
+  bandit:
+    name: bandit (advisory)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - run: pip install bandit[toml]
+      - name: Run bandit
+        run: bandit -r backend -ll -x backend/tests
