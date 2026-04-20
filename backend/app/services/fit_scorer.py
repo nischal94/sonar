@@ -13,9 +13,15 @@ from typing import Sequence
 
 
 def cosine_similarity(a: Sequence[float], b: Sequence[float]) -> float:
-    """Cosine similarity in [-1, 1]. Returns 0.0 if either vector is zero."""
+    """Cosine similarity in [-1, 1]. Returns 0.0 if either vector is zero.
+
+    Pure-Python implementation — acceptable for the scoring layer where
+    this runs once per post-connection pair at pipeline time. If a future
+    caller batches thousands of pairs (e.g. a bulk re-embedding job),
+    migrate to numpy or defer to pgvector's `<=>` operator at the DB layer.
+    """
     if len(a) != len(b):
-        raise ValueError(f"dimension mismatch: {len(a)} vs {len(b)}")
+        raise ValueError(f"[fit_scorer] dimension mismatch: a={len(a)}, b={len(b)}")
     dot = sum(x * y for x, y in zip(a, b))
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(y * y for y in b))
@@ -43,7 +49,12 @@ def compute_fit_score(
     if not (
         len(icp_embedding) == len(seller_mirror_embedding) == len(connection_embedding)
     ):
-        raise ValueError("all three embeddings must share dimension")
+        raise ValueError(
+            f"[fit_scorer] embedding dimensions must match: "
+            f"icp={len(icp_embedding)}, "
+            f"mirror={len(seller_mirror_embedding)}, "
+            f"conn={len(connection_embedding)}"
+        )
 
     icp_cos = cosine_similarity(icp_embedding, connection_embedding)
     mirror_cos = cosine_similarity(seller_mirror_embedding, connection_embedding)

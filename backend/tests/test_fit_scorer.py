@@ -91,41 +91,61 @@ def test_fit_score_negative_lambda_raises():
 # ---------- compute_intent_score ----------
 
 
+# Fixed sentinel "now" so every intent-score test is deterministic. Using
+# datetime.now() in the test body would (a) violate CLAUDE.md's "no
+# datetime.now() in tests" rule and (b) make the timing term drift relative
+# to the implementation's own now(), forcing loose abs_tol. Passing the same
+# `now` into both sides gives exact equality.
+FIXED_NOW = datetime(2026, 1, 15, 12, 0, tzinfo=timezone.utc)
+
+
 def test_intent_score_fresh_post_full_relevance():
-    now = datetime.now(timezone.utc)
-    score = compute_intent_score(relevance_score=1.0, posted_at=now)
-    assert math.isclose(score, 1.0, abs_tol=1e-3)  # 0.7*1 + 0.3*1 = 1
+    score = compute_intent_score(
+        relevance_score=1.0, posted_at=FIXED_NOW, now=FIXED_NOW
+    )
+    # 0.7 * 1 + 0.3 * 1 = 1.0 exactly
+    assert math.isclose(score, 1.0, abs_tol=1e-9)
 
 
 def test_intent_score_stale_post_timing_decayed_to_zero():
-    then = datetime.now(timezone.utc) - timedelta(hours=48)
-    score = compute_intent_score(relevance_score=1.0, posted_at=then)
+    then = FIXED_NOW - timedelta(hours=48)
+    score = compute_intent_score(relevance_score=1.0, posted_at=then, now=FIXED_NOW)
     # relevance 1 * 0.7 + timing 0 * 0.3 = 0.7
-    assert math.isclose(score, 0.7, abs_tol=1e-3)
+    assert math.isclose(score, 0.7, abs_tol=1e-9)
 
 
 def test_intent_score_mid_decay():
-    then = datetime.now(timezone.utc) - timedelta(hours=12)
-    score = compute_intent_score(relevance_score=0.5, posted_at=then)
+    then = FIXED_NOW - timedelta(hours=12)
+    score = compute_intent_score(relevance_score=0.5, posted_at=then, now=FIXED_NOW)
     # relevance 0.5 * 0.7 + timing 0.5 * 0.3 = 0.35 + 0.15 = 0.5
-    assert math.isclose(score, 0.5, abs_tol=1e-2)
+    assert math.isclose(score, 0.5, abs_tol=1e-9)
 
 
 def test_intent_score_clamped_to_unit_interval():
-    now = datetime.now(timezone.utc)
-    assert 0.0 <= compute_intent_score(relevance_score=0.0, posted_at=now) <= 1.0
-    assert 0.0 <= compute_intent_score(relevance_score=1.5, posted_at=now) <= 1.0
+    assert (
+        0.0
+        <= compute_intent_score(relevance_score=0.0, posted_at=FIXED_NOW, now=FIXED_NOW)
+        <= 1.0
+    )
+    assert (
+        0.0
+        <= compute_intent_score(relevance_score=1.5, posted_at=FIXED_NOW, now=FIXED_NOW)
+        <= 1.0
+    )
 
 
 # ---------- compute_hybrid_score ----------
 
 
 def test_hybrid_score_multiplies_fit_and_intent():
-    assert math.isclose(compute_hybrid_score(fit_score=0.4, intent_score=0.9), 0.36)
+    assert math.isclose(
+        compute_hybrid_score(fit_score=0.4, intent_score=0.9), 0.36, abs_tol=1e-9
+    )
 
 
 def test_hybrid_score_zero_fit_suppresses():
-    """The Lipi Mittal fix: low fit zeros out regardless of intent."""
+    """Low fit zeros out regardless of intent — the core Phase 2.6 fix.
+    See docs/phase-2-6/design.md §3.5 for the motivating failure mode."""
     assert compute_hybrid_score(fit_score=0.0, intent_score=0.95) == 0.0
 
 
