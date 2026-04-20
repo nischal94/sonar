@@ -85,3 +85,42 @@ async def client(db_session):
     ) as c:
         yield c
     app.dependency_overrides.clear()
+
+
+@pytest_asyncio.fixture
+async def workspace_id(db_session):
+    """Create a test workspace and return its UUID."""
+    from app.models.workspace import Workspace
+
+    ws = Workspace(name="Test WS", plan_tier="starter")
+    db_session.add(ws)
+    await db_session.flush()
+    return ws.id
+
+
+@pytest_asyncio.fixture
+async def auth_headers(workspace_id, db_session):
+    """Install a dependency override for get_current_user that returns a fake
+    User bound to `workspace_id`, and return an empty headers dict.
+
+    Tests do: `await client.post('/x', json=..., headers=auth_headers)`.
+    The override is cleared by the `client` fixture's `app.dependency_overrides.clear()`
+    at teardown, so no leak between tests.
+    """
+    from app.main import app
+    from app.routers.auth import get_current_user
+    from app.models.user import User
+
+    user = User(
+        email="test@example.com",
+        hashed_password="x",  # not used — auth is overridden
+        workspace_id=workspace_id,
+    )
+    db_session.add(user)
+    await db_session.flush()
+
+    async def _override():
+        return user
+
+    app.dependency_overrides[get_current_user] = _override
+    return {}  # empty dict; override handles auth, no Bearer token needed

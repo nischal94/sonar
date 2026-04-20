@@ -3,6 +3,7 @@ import httpx
 from dataclasses import dataclass
 from app.config import OPENAI_MODEL_EXPENSIVE
 from app.services.llm import llm_client, LLMProvider
+from app.prompts import extract_icp_and_seller_mirror as icp_prompt
 
 PROFILE_EXTRACTION_PROMPT = """
 Analyze this company's website/document to build a sales intelligence capability profile.
@@ -44,6 +45,7 @@ async def fetch_url_content(url: str) -> str:
         resp = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
         resp.raise_for_status()
         from bs4 import BeautifulSoup
+
         soup = BeautifulSoup(resp.text, "html.parser")
         for tag in soup(["script", "style", "nav", "footer"]):
             tag.decompose()
@@ -81,3 +83,36 @@ async def extract_capability_profile(
 
     data = json.loads(raw)
     return CapabilityProfile(**data)
+
+
+async def extract_icp_and_seller_mirror(
+    *,
+    source_text: str,
+    llm_override=None,
+) -> tuple[str, str]:
+    """Call the ICP+seller_mirror prompt. Returns (icp, seller_mirror) strings.
+
+    Parse JSON, minimal schema check. Raises ValueError on malformed output.
+    """
+    from app.services.llm import get_llm_client
+
+    llm = llm_override or get_llm_client()
+    user_msg = icp_prompt.build_user_message(source_text=source_text)
+
+    raw = await llm.complete(
+        prompt=user_msg,
+        system=icp_prompt.SYSTEM_PROMPT,
+        model=OPENAI_MODEL_EXPENSIVE,
+        max_tokens=1200,
+    )
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise ValueError(
+            f"[profile_extractor] ICP prompt returned non-JSON: {e}. Raw: {raw[:200]}"
+        )
+    if "icp" not in parsed or "seller_mirror" not in parsed:
+        raise ValueError(
+            f"[profile_extractor] ICP response missing required keys. Got: {list(parsed.keys())}"
+        )
+    return parsed["icp"], parsed["seller_mirror"]
