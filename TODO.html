@@ -430,13 +430,13 @@
 <div class="wrap">
 
   <p class="eyebrow">Sonar · Project TODO</p>
-  <h1>First dogfood done. Fix matching quality, then ship Discovery.</h1>
-  <p class="sub">Session 7 was the first real end-to-end run. It caught that Backfill's trigger endpoint had never been wired to Celery despite shipping green tests, plus 6 other bugs along the extension → backend → Apify path. All fixed in PRs #103 and #104. The remaining quality gap is the scorer's relationship-score default (#105) which blocks threshold calibration (#106).</p>
+  <h1>Calibration proved the matching model can't ship as-is. Phase 2.6 is now the critical path.</h1>
+  <p class="sub">Session 8 labeled a 30-post dogfood dataset under the current post-only Ring 2 scoring. F1<sub>max</sub> = 0.27. The cosine distributions of real-matches and non-matches are <em>inverted</em> at the top — the #1 and #2 highest-cosine posts in the dataset are from competing vendors (NotifyVisitors CPO, MoEngage sales director). No threshold can recover usable precision + recall. The current primitive needs a Fit × Intent redesign before it can ship. See issue <a href="https://github.com/nischal94/sonar/issues/113">#113</a>, PR <a href="https://github.com/nischal94/sonar/pull/114">#114</a>, and <code>eval/calibration/findings-dogfood-martech.md</code>.</p>
 
   <section class="stats">
     <div class="stat">
       <p class="stat-label">Main HEAD</p>
-      <p class="stat-value">6cfa360</p>
+      <p class="stat-value">481f299</p>
     </div>
     <div class="stat">
       <p class="stat-label">Latest tag</p>
@@ -444,7 +444,7 @@
     </div>
     <div class="stat">
       <p class="stat-label">Tests</p>
-      <p class="stat-value ok">129 / 129</p>
+      <p class="stat-value ok">136 / 136</p>
     </div>
     <div class="stat">
       <p class="stat-label">CI</p>
@@ -455,65 +455,64 @@
   <!-- HERO: first action next session -->
   <section class="hero">
     <span class="pill info">Start here tomorrow</span>
-    <h3 style="margin-top:10px">⏱ Verify the dashboard populates (5 minutes)</h3>
-    <p>Open <code>http://localhost:5173</code>, log in, check the intent-matches pane shows the 8 backfilled posts that crossed <code>matching_threshold=0.30</code> on the dogfood workspace. It's the only thing left unverified from session 7 — all code is merged and pushed.</p>
+    <h3 style="margin-top:10px">✅ Review + merge PR #114 (calibration findings), then brainstorm Phase 2.6</h3>
+    <p>Read <code>eval/calibration/findings-dogfood-martech.md</code> and <code>phase-2.6-evidence.md</code> on PR #114. If the interpretation holds, merge. Close issue #106 as superseded by #113. Then start <code>superpowers:brainstorming</code> to scope the Fit × Intent scoring redesign — that's the only thing on the critical path now.</p>
     <div class="hero-meta">
-      <span>After this: 🐛 #105 (scorer bug, blocks #106) → 🎯 #106 threshold calibration → 🔒 #107+#108 security → 🧭 Phase 2 Discovery</span>
-      <span>Full 6-item plan with rationale in the Next Session Action Plan section below</span>
+      <span>After this: 🧭 Phase 2.6 design brainstorm → 🔒 #107 + #108 hardening → Phase 2.6 implementation → Discovery (deferred until 2.6 ships)</span>
+      <span>Full ordered plan with rationale in the Next Session Action Plan section below</span>
     </div>
   </section>
 
   <!-- NEXT SESSION ACTION PLAN — mirrors TODO.md §"Next Session Action Plan" -->
-  <h2>Next Session Action Plan <span style="font-size: 12px; color: var(--ink-soft); font-weight: normal;">(last rewritten 2026-04-20, end of session 7)</span></h2>
+  <h2>Next Session Action Plan <span style="font-size: 12px; color: var(--ink-soft); font-weight: normal;">(last rewritten 2026-04-20, end of session 8)</span></h2>
   <p class="tight" style="color: var(--ink-soft); margin-bottom: 16px;">Ordered. Item 1 is literally the first thing to do. Each item has What / Why now / Blocks / Effort.</p>
 
   <div class="action-plan">
     <details open>
-      <summary><strong>1. ⏱ Verify the end-to-end loop</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">5 minutes &middot; do first</span></summary>
+      <summary><strong>1. ✅ Review + merge PR <a href="https://github.com/nischal94/sonar/pull/114">#114</a> (calibration findings)</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">15–30 min &middot; do first</span></summary>
       <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
-        <li><strong>What:</strong> Open <code>http://localhost:5173</code>, log in, check the intent-matches pane shows the 8 backfilled posts that crossed <code>matching_threshold=0.30</code>.</li>
-        <li><strong>Why now:</strong> Only thing left unverified from session 7. If it works, Backfill is truly shipped. If it doesn't, the chain has one more bug before #105 matters.</li>
-        <li><strong>Blocks:</strong> Nothing downstream, but unresolved until the dashboard is eyed.</li>
-        <li><strong>Effort:</strong> 5 minutes.</li>
+        <li><strong>What:</strong> Read <code>eval/calibration/findings-dogfood-martech.md</code> and <code>phase-2.6-evidence.md</code>. If the interpretation holds, merge. Close <a href="https://github.com/nischal94/sonar/issues/106">#106</a> as superseded by <a href="https://github.com/nischal94/sonar/issues/113">#113</a> with a cross-link.</li>
+        <li><strong>Why now:</strong> Calibration evidence is only on a feature branch. Every subsequent decision depends on it being canonical in <code>main</code>.</li>
+        <li><strong>Blocks:</strong> Item 2 (Phase 2.6 brainstorm should reference merged evidence, not a PR branch).</li>
+        <li><strong>Effort:</strong> 15–30 min.</li>
       </ul>
     </details>
 
     <details>
-      <summary><strong>2. 🐛 Fix issue <a href="https://github.com/nischal94/sonar/issues/105">#105</a> — <code>relationship_score</code> default fallback bug</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">1–2 hours &middot; BLOCKER for #106</span></summary>
+      <summary><strong>2. 🧭 Phase 2.6 — Fit × Intent scoring design brainstorm</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">full session &middot; the central session-9 activity</span></summary>
       <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
-        <li><strong>What:</strong> Scorer returns <code>0.5</code> for every 1st-degree connection instead of the documented <code>0.9</code>. Investigate <code>app/workers/scorer.py</code>, locate the default-fallback path, fix to read <code>Connection.degree</code>, add a regression test asserting <code>relationship_score ≥ 0.9</code> for degree=1.</li>
-        <li><strong>Why now:</strong> Blocks #106 — calibration against a broken scorer produces a broken threshold. Also raises combined-score ceiling on backfilled posts from 0.77 → 0.89.</li>
-        <li><strong>Blocks:</strong> <a href="https://github.com/nischal94/sonar/issues/106">#106</a> (threshold calibration).</li>
-        <li><strong>Effort:</strong> 1–2 hours. Small isolated fix.</li>
+        <li><strong>What:</strong> Run <code>superpowers:brainstorming</code> with problem framed per <a href="https://github.com/nischal94/sonar/issues/113">#113</a>. Produce <code>docs/phase-2-6/design.md</code> covering: fit-encoder choice (BGE / E5 / OpenAI 3-large with asymmetric prompts), per-connection <code>fit_score</code> schema + inputs (headline + company + role vs. ICP), ICP disqualifiers (competitors, vendors in same category), combination strategy (multiplicative vs additive), persistence-of-prior-signals (Bayesian bump across posts from high-intent authors), calibration plan (re-use <code>backend/scripts/calibrate_matching.py</code>, same 30-post dogfood dataset as before/after baseline).</li>
+        <li><strong>Why now:</strong> Single most important open question for the product. The calibration proved the current primitive cannot ship. Every other Phase 2 + Phase 3 item depends on matching being meaningful.</li>
+        <li><strong>Blocks:</strong> Phase 2 Discovery, all Phase 3 work, any launch plan.</li>
+        <li><strong>Effort:</strong> Full session brainstorming + design doc. Implementation is 2–3 sessions after.</li>
       </ul>
     </details>
 
     <details>
-      <summary><strong>3. 🎯 Plan and execute issue <a href="https://github.com/nischal94/sonar/issues/106">#106</a> — threshold calibration</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">full session &middot; blocked by #105</span></summary>
+      <summary><strong>3. 🔒 Hardening: issues <a href="https://github.com/nischal94/sonar/issues/107">#107</a> + <a href="https://github.com/nischal94/sonar/issues/108">#108</a></strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">~1.5 hours combined &middot; do before first external user</span></summary>
       <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
-        <li><strong>What:</strong> Build a golden eval dataset of ~100-200 real LinkedIn posts labeled "IS a buying-intent signal" vs "isn't." Run the scorer across thresholds 0.2–0.9. Plot precision/recall. Pick the elbow (may produce a split live vs. backfill threshold).</li>
-        <li><strong>Why now:</strong> The 0.72 default was never empirically tuned. Live dogfood showed it's mathematically unreachable for posts older than 24h.</li>
-        <li><strong>Blocks:</strong> Confidence in the product's matching claim. The product is "half-broken by design" until this lands.</li>
-        <li><strong>Effort:</strong> Full session. Includes hand-labeling work.</li>
-      </ul>
-    </details>
-
-    <details>
-      <summary><strong>4. 🔒 Hardening: issues <a href="https://github.com/nischal94/sonar/issues/107">#107</a> + <a href="https://github.com/nischal94/sonar/issues/108">#108</a></strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">~1.5 hours combined &middot; do before first external user</span></summary>
-      <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
-        <li><strong>#107 — CORS service-worker routing:</strong> Route extension fetches through the background service worker (origin <code>chrome-extension://&lt;id&gt;</code>, already allowed). Remove <code>https://www.linkedin.com</code> from <code>app/main.py</code> <code>allow_origins</code>. Closes the <code>/auth/token</code> response-read exposure tonight's CORS widening created. <strong>Effort:</strong> ~1 hour.</li>
+        <li><strong>#107 — CORS service-worker routing:</strong> Route extension fetches through the background service worker (origin <code>chrome-extension://&lt;id&gt;</code>, already allowed). Remove <code>https://www.linkedin.com</code> from <code>app/main.py</code> <code>allow_origins</code>. Closes the <code>/auth/token</code> response-read exposure the session-7 CORS widening created. <strong>Effort:</strong> ~1 hour.</li>
         <li><strong>#108 — Apify token to Authorization header:</strong> Move from URL query param (<code>?token=apify_api_...</code>) to <code>Authorization: Bearer</code> in <code>app/services/apify.py</code>. Verify harvestapi accepts header auth. Stops plaintext-token leak into worker logs. <strong>Effort:</strong> ~30 minutes.</li>
-        <li><strong>Why now:</strong> Both small, both security-adjacent. Best done in one commit before any external user signs up.</li>
+        <li><strong>Why now:</strong> Both small, both security-adjacent. Best done before any external user signs up. Not blocked on Phase 2.6; can ship in parallel.</li>
       </ul>
     </details>
 
     <details>
-      <summary><strong>5. 🧭 Phase 2 Discovery slice</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">multi-session &middot; final Phase 2 slice</span></summary>
+      <summary><strong>4. 🛠 Small quality fixes</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">any time, low effort</span></summary>
+      <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
+        <li><strong><a href="https://github.com/nischal94/sonar/issues/110">#110</a> — Ring 1 dead:</strong> Signals are full phrases; Ring 1 does literal substring match; produces zero hits. May disappear if Phase 2.6 reshapes signal shape; revisit during 2.6 design.</li>
+        <li><strong><a href="https://github.com/nischal94/sonar/issues/111">#111</a> — Dashboard slider default 0.65 ignores workspace <code>matching_threshold</code>:</strong> ~30 min frontend fix. Not urgent.</li>
+        <li><strong>Dogfood DB cleanup:</strong> Session-8 ran the <code>UPDATE connections SET relationship_score = NULL WHERE relationship_score = 0.5 AND NOT has_interacted</code> from PR <a href="https://github.com/nischal94/sonar/pull/112">#112</a>. Noted here in case a fresh env is restored from snapshot.</li>
+      </ul>
+    </details>
+
+    <details>
+      <summary><strong>5. 🧭 Phase 2 Discovery</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">DEFERRED until Phase 2.6 ships</span></summary>
       <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
         <li><strong>What:</strong> Ring 3 nightly HDBSCAN clustering for emerging topics + Weekly Digest Email. Per <code>docs/phase-2/design.md §4.4</code>.</li>
-        <li><strong>Why now:</strong> After #105 + #106, matching quality is trustworthy enough to build discovery on top of. Before that, clusters would form around noise.</li>
-        <li><strong>Start with:</strong> <code>superpowers:brainstorming</code> to scope decisions (clustering approach, digest template, schedule, opt-in flow).</li>
-        <li><strong>Effort:</strong> Multi-session. Most uncertainty of any Phase 2 slice.</li>
+        <li><strong>Why not now:</strong> Clustering the current matching signal clusters noise (F1 = 0.27). Discovery is building on sand until 2.6 lands.</li>
+        <li><strong>When to revisit:</strong> After Phase 2.6 ships <em>and</em> re-calibration produces F1 ≥ 0.6.</li>
+        <li><strong>Effort:</strong> Multi-session when it's time.</li>
       </ul>
     </details>
 
@@ -531,12 +530,14 @@
   <!-- PHASE STATUS -->
   <h2>Phase status</h2>
 
-  <div class="progress" title="Phase 2: 4 of 5 slices shipped">
+  <div class="progress" title="Phase 2: 4 of 5 original slices shipped; 2.5 in PR; 2.6 new; Discovery deferred">
     <div class="progress-cell done" title="Foundation ✓"></div>
     <div class="progress-cell done" title="Wizard ✓"></div>
     <div class="progress-cell done" title="Dashboard ✓"></div>
     <div class="progress-cell done" title="Backfill ✓"></div>
-    <div class="progress-cell" title="Discovery — not started"></div>
+    <div class="progress-cell" title="2.5 Calibration evidence (PR #114 open)" style="background: var(--warn-bg);"></div>
+    <div class="progress-cell" title="2.6 Fit × Intent (design pending)"></div>
+    <div class="progress-cell" title="Discovery — deferred until 2.6 ships"></div>
   </div>
 
   <table class="phase-table">
@@ -562,12 +563,22 @@
       <tr>
         <td class="slice">Backfill</td>
         <td><span class="pill ok">Shipped</span></td>
-        <td class="desc">Day-One Backfill — extension captures connections, 1st-degree Apify scrape (200 × 60 days, ~$0.40/ws), completion email, dashboard banner polls at 5s. 2nd-degree deferred. Session 7 dogfood discovered the trigger endpoint had never been wired to Celery despite green tests in PR #77; <code>PR #104</code> fixed plus several adjacent bugs. <code>PR #77</code> + <code>PR #104</code></td>
+        <td class="desc">Day-One Backfill — extension captures connections, 1st-degree Apify scrape (200 × 60 days, ~$0.40/ws), completion email, dashboard banner polls at 5s. Session 7 wiring completed via <code>PR #104</code>. <code>PR #77</code> + <code>PR #104</code></td>
+      </tr>
+      <tr>
+        <td class="slice">2.5 Calibration evidence</td>
+        <td><span class="pill warn">PR #114 open</span></td>
+        <td class="desc">Session-8 output. Labeled 30-post dogfood dataset + findings report + Phase 2.6 evidence pool + reusable <code>calibrate_matching.py</code> harness. Proves current post-only matching primitive scores near-randomly (F1 = 0.27, distributions inverted). See <a href="https://github.com/nischal94/sonar/issues/113">#113</a>.</td>
+      </tr>
+      <tr>
+        <td class="slice">2.6 Fit × Intent scoring</td>
+        <td><span class="pill neutral">Design pending</span></td>
+        <td class="desc">New slice replacing narrow "threshold calibration" framing of <a href="https://github.com/nischal94/sonar/issues/106">#106</a>. Per-connection fit score from headline + company + role, combined multiplicatively with per-post intent score. Matches industry standard (6sense / Apollo / Demandbase). Next-session work: <code>superpowers:brainstorming</code> → <code>docs/phase-2-6/design.md</code>.</td>
       </tr>
       <tr>
         <td class="slice">Discovery</td>
-        <td><span class="pill neutral">Not started</span></td>
-        <td class="desc">Ring 3 nightly HDBSCAN clustering for emerging topics + Weekly Digest Email. Most experimental — best built last when real data exists. Needs <code>superpowers:brainstorming</code> first.</td>
+        <td><span class="pill neutral">Deferred</span></td>
+        <td class="desc">Ring 3 nightly HDBSCAN clustering + Weekly Digest. Deferred until Phase 2.6 re-calibrates to F1 ≥ 0.6 — clustering the current signal clusters noise.</td>
       </tr>
     </tbody>
   </table>
@@ -867,6 +878,17 @@ docker compose exec -T api alembic upgrade head
   <p class="tight" style="color: var(--ink-soft); margin-bottom: 16px;">Newest first; terse. Full forensics live in git commit messages + PR descriptions. Files under <code>docs/session-notes/</code> (sessions 1–7) are historical — no new entries are added there.</p>
 
   <details open>
+    <summary><strong>Session 8 · 2026-04-20</strong> — Login page, scorer fix, and the calibration finding that reshaped Phase 2</summary>
+    <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
+      <li><strong>Merged:</strong> <a href="https://github.com/nischal94/sonar/pull/109">PR #109</a> (frontend <code>/login</code> page), <a href="https://github.com/nischal94/sonar/pull/112">PR #112</a> (fixes <a href="https://github.com/nischal94/sonar/issues/105">#105</a> — <code>Connection.relationship_score</code> was forced to 0.5 by ORM default, bypassing <code>DEGREE_BASE_SCORE</code> fallback; migration 007 makes column nullable).</li>
+      <li><strong>Open:</strong> <a href="https://github.com/nischal94/sonar/pull/114">PR #114</a> — calibration harness + labeled 30-post dogfood dataset + findings report + Phase 2.6 evidence pool. Awaiting review/merge.</li>
+      <li><strong>Filed:</strong> <a href="https://github.com/nischal94/sonar/issues/110">#110</a> (Ring 1 dead — phrases vs keywords), <a href="https://github.com/nischal94/sonar/issues/111">#111</a> (dashboard slider default), <strong><a href="https://github.com/nischal94/sonar/issues/113">#113</a> (matching model not viable — Phase 2.6 required)</strong>.</li>
+      <li><strong>Calibration headline:</strong> F1<sub>max</sub> = 0.27 against hand-labeled dogfood dataset (4 yes / 26 no). Cosine distributions of real-matches and non-matches are <em>inverted</em> at the top — the #1 and #2 highest-cosine posts in the whole dataset are from competing vendors (NotifyVisitors CPO, MoEngage sales director). No threshold can recover usable precision + recall.</li>
+      <li><strong>Roadmap change:</strong> Added Phase 2.5 (calibration evidence) and Phase 2.6 (Fit × Intent scoring) between Phase 2 Backfill and Phase 2 Discovery. Discovery deferred until 2.6 achieves F1 ≥ 0.6 against the same dataset. Issue <a href="https://github.com/nischal94/sonar/issues/106">#106</a> superseded by <a href="https://github.com/nischal94/sonar/issues/113">#113</a>.</li>
+    </ul>
+  </details>
+
+  <details>
     <summary><strong>Session 7 · 2026-04-20</strong> — First live dogfood + Backfill Celery wiring + doc consolidation</summary>
     <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
       <li><strong>Merged:</strong> <a href="https://github.com/nischal94/sonar/pull/103">PR #103</a> (Wizard: gpt-5.4-mini param rename + list-top-level LLM output tolerance), <a href="https://github.com/nischal94/sonar/pull/104">PR #104</a> (Backfill: wired day_one_backfill Celery task — previously shipped with green tests but never actually dispatched; plus CORS, Apify URL canonicalization, scraper rewrite, Pydantic truncation).</li>

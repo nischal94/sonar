@@ -4,55 +4,54 @@
 
 ---
 
-## Next Session Action Plan (last rewritten 2026-04-20, end of session 7)
+## Next Session Action Plan (last rewritten 2026-04-20, end of session 8)
 
-**State at resume:** `main` HEAD = `af54add` (check with `git log -1`). Tests: 129 backend pass + 3 real-OpenAI skipped. All CI green. Working tree clean.
+**State at resume:** `main` HEAD = `481f299` (check with `git log -1`). Tests: 136 backend pass. CI green on `main`. Working tree clean. **PR #114 open** on branch `eval/calibration-v1` with the calibration harness + findings — needs review + merge before session-9 work starts.
 
-### 1. ⏱ Verify the end-to-end loop (5 min — do this FIRST)
+### 1. ✅ Review + merge PR #114 (calibration findings)
 
-**What:** Open `http://localhost:5173`, log in, check the intent-matches pane shows the 8 backfilled posts that crossed `matching_threshold=0.30` on the dogfood workspace.
-**Why now:** It's the only thing left unverified from session 7. All code merged + pushed; only the dashboard render is unseen. If it works, Backfill is truly shipped. If it doesn't, the chain has one more bug before #105 matters.
-**Blocks:** nothing downstream, but unresolved until the dashboard is eyed.
-**Effort:** 5 minutes.
+**What:** Read `eval/calibration/findings-dogfood-martech.md` and `eval/calibration/phase-2.6-evidence.md` on PR #114. If the interpretation holds up, merge. Close issue #106 ("threshold calibration") as superseded by #113 ("matching model not viable — Phase 2.6 required") — reference #113 in the close comment.
+**Why now:** The calibration evidence is currently only on a feature branch. Every subsequent decision depends on it being canonical in `main`. Keeping it unmerged risks losing it or losing the thread.
+**Blocks:** Item 2 (Phase 2.6 brainstorm should reference the merged evidence, not a PR branch).
+**Effort:** 15–30 min (read, merge, close #106).
 
-### 2. 🐛 Fix issue #105 — `relationship_score` default fallback bug (BLOCKER)
+### 2. 🧭 Phase 2.6 — Fit × Intent scoring design brainstorm (the central session-9 activity)
 
-**What:** Scorer returns `0.5` for every 1st-degree connection instead of the documented `0.9`. Investigate `app/workers/scorer.py` (or wherever scoring lives), locate the default-fallback path, fix to read `Connection.degree`, add a regression test that inserts a degree=1 Connection + Post and asserts `relationship_score ≥ 0.9`.
-**Why now:** Blocks #106 directly — calibration against a broken scorer produces a broken threshold. Also raises combined-score ceiling on backfilled posts from 0.77 → 0.89, which materially improves matching quality for live signals too.
-**Blocks:** #106 (threshold calibration).
-**Effort:** ~1-2 hours. Small isolated fix.
+**What:** Run `superpowers:brainstorming` with the problem framed per issue #113: "design a Fit × Intent hybrid scoring model for Sonar that fixes the failure modes in `eval/calibration/phase-2.6-evidence.md`." Produce `docs/phase-2-6/design.md` covering: the fit-encoder choice (BGE / E5 / OpenAI 3-large with asymmetric prompts), per-connection `fit_score` schema + inputs (headline + company + role vs. ICP profile), how to capture ICP disqualifiers (competitors, vendors in same category), how to combine with intent (multiplicative vs additive), persistence-of-prior-signals (Bayesian bump across posts from same high-intent author), calibration plan (re-use `backend/scripts/calibrate_matching.py`, same 30-post dogfood dataset as "before/after" baseline).
+**Why now:** This is the single most important open question for the product. The calibration proved the current primitive cannot ship. Every other Phase 2 item (Discovery) and Phase 3 item (real-time, CRM, team) depends on matching being meaningful. Nothing matters more than getting this right.
+**Blocks:** Phase 2 Discovery, all Phase 3 work, any launch plan.
+**Effort:** Full session for brainstorming + design doc. Implementation is another 2–3 sessions after.
 
-### 3. 🎯 Plan and execute issue #106 — threshold calibration
+### 3. 🔒 Hardening: issues #107 + #108 (do before first external user)
 
-**What:** Build a golden eval dataset of ~100-200 real LinkedIn posts labeled "IS a buying-intent signal" vs "isn't" against the dogfood workspace's signals. Run the scorer against the set at thresholds 0.2–0.9. Plot precision/recall. Pick the threshold at the elbow (may split live vs. backfill).
-**Why now:** The `0.72` default was never empirically tuned. Live dogfood showed it's unreachable for any post older than 24h. Users deploying with default settings will see empty dashboards.
-**Blocks:** confidence in the product's matching claim. Nothing structural waits on it, but the product is "half-broken by design" until it's done.
-**Effort:** Full session on its own — most uncertainty of any next item. Includes hand-labeling work.
+**#107 — CORS service-worker routing.** Route extension fetches through the background service worker (whose origin is `chrome-extension://<id>`, already allowed). Remove `https://www.linkedin.com` from `app/main.py` `allow_origins`. Closes the `/auth/token` response-read exposure the session-7 CORS widening created. **Effort:** ~1 hour.
 
-### 4. 🔒 Hardening: issues #107 + #108 (both small, do before first external user)
+**#108 — Apify token to `Authorization` header.** Move from URL query param (`?token=apify_api_...`) to `Authorization: Bearer` header in `app/services/apify.py`. Verify harvestapi accepts header auth. Stops the plaintext-token leak into every worker log line. **Effort:** ~30 minutes.
 
-**#107 — CORS service-worker routing.** Route extension fetches through the background service worker (whose origin is `chrome-extension://<id>`, already allowed). Remove `https://www.linkedin.com` from `app/main.py` `allow_origins`. Closes the `/auth/token` response-read exposure tonight's CORS widening created. **Effort:** ~1 hour.
+**Why now:** Both are security-adjacent and small. Best done in one commit *before* any external user signs up. Not blocked on Phase 2.6 — can ship in parallel or in a gap between brainstorm and implementation.
 
-**#108 — Apify token to Authorization header.** Move from URL query param (`?token=apify_api_...`) to `Authorization: Bearer` header in `app/services/apify.py`. Verify harvestapi accepts header auth. Stops the plaintext-token leak into every worker log line. **Effort:** ~30 minutes.
+### 4. 🛠 Small quality fixes (any time, low effort)
 
-**Why now:** Both are security-adjacent and small. Best done in one commit before any external user signs up.
+- **#110 — Ring 1 dead.** Signals are full phrases; Ring 1 does literal substring match; produces zero hits. Partially overlaps with Phase 2.6 (may disappear if Phase 2.6 reshapes what a "signal" is). Decide in Phase 2.6 design whether to fix standalone or fold in.
+- **#111 — Dashboard slider default (0.65) ignores workspace `matching_threshold`.** Small frontend fix: pass the workspace's stored threshold on initial render. ~30 minutes. Not urgent.
+- **Dogfood DB cleanup (per PR #112 body).** Run `UPDATE connections SET relationship_score = NULL WHERE relationship_score = 0.5 AND NOT has_interacted;` on the dogfood workspace to let the fixed scorer see correct values. Already done in session 8; noted here in case a fresh environment is restored from a snapshot.
 
-### 5. 🧭 Phase 2 Discovery slice (the final Phase 2 slice)
+### 5. 🧭 Phase 2 Discovery (DEFERRED until Phase 2.6 ships)
 
 **What:** Ring 3 nightly HDBSCAN clustering for emerging topics + Weekly Digest Email. Per `docs/phase-2/design.md §4.4`.
-**Why now:** After #105 + #106, matching quality is trustworthy enough to build discovery on top of. Before that, clusters would form around noise.
-**Start with:** `superpowers:brainstorming` to scope decisions (which clustering approach, digest template, schedule, opt-in flow).
-**Effort:** Multi-session. Most uncertainty of any Phase 2 slice.
+**Why not now:** Clustering posts by the current matching signal clusters noise (F1 = 0.27). Discovery is building on sand until Phase 2.6 lands.
+**When to revisit:** After Phase 2.6 ships *and* re-calibration against the dogfood dataset produces F1 ≥ 0.6.
+**Effort:** Multi-session when it's time.
 
-### 6. 🚧 Pre-launch tier (gates before first external paying customer)
+### 6. 🚧 Pre-launch tier (gates before first external paying customer — NOT next-session work)
 
-Not next-session work, but tracked so it doesn't surprise:
+Tracked so they don't surprise:
 - **PII/GDPR:** data retention policy + export + deletion endpoints. Not started.
 - **Observability:** structlog + Sentry + Prometheus + split `/health/live` vs `/ready` + DB backup/restore drill. Not started.
 - **LLM eval harness:** activates once `signal_proposal_events` has ~100+ real completions.
 - **Frontend dep bumps:** React 18→19, Vite 6→8, react-router-dom 6→7. Tracked in #40. Requires human in browser — plan a dedicated half-day.
 
-None of these block session-8 work; all gate first external customer.
+None of these belong in session 9; all gate first external customer.
 
 ---
 
@@ -62,19 +61,21 @@ None of these block session-8 work; all gate first external customer.
 
 Ingest pipeline, capability profile extraction, signal matching, scoring, alerts, delivery channels (Slack / email / Telegram / WhatsApp), Chrome extension, React dashboard, JWT auth. All known Phase 1 bugs closed.
 
-### Phase 2 — **4 of 5 slices shipped, 1 remaining**
+### Phase 2 — **4 of 5 original slices shipped; re-sequenced after session-8 calibration finding**
 
 | Slice | Status | What it is |
 |---|---|---|
 | **Foundation** | ✅ Shipped (PR #10) | Migration 002, 4 new ORM models, Ring 1/2 matchers, pipeline refactor, scorer keyword bonus, one-shot backfill script. |
-| **Wizard** | ✅ Shipped session 4 (PRs #64 + #68 + #70) | 5-step Signal Configuration Wizard at `/signals/setup`. Backend: `POST /workspace/signals/propose` + `/confirm`, `signal_proposal_events` telemetry, `app/prompts/propose_signals.py` v1 with idempotency + role-separation defense. |
-| **Dashboard** | ✅ Shipped session 5 (PR #73) | Ranked People List at `/dashboard`. `incremental_trending` Celery task keeps `person_signal_summary` fresh within ~100 ms/post. 30s polling + tab-visibility pause + instant refetch on filter change. Heatmap + Trending Topics sections deferred. |
-| **Backfill** | ✅ Shipped session 6 (PR #77), wiring completed session 7 (PR #104) | Day-One Backfill. Extension captures connections → bulk upsert → Celery task runs 1st-degree Apify scrape (200 × 60 days, ~$0.40/ws) → posts flow through pipeline → completion email. Dashboard banner polls status at 5s. Session 7 dogfood discovered the trigger endpoint had never been wired to Celery (PR #104 fixed) and surfaced DOM / CORS / URL-normalization bugs along the end-to-end path. 2nd-degree deferred — research in issue #76. |
-| **Discovery** | ⬜ Not started | Ring 3 nightly HDBSCAN clustering for emerging topics + Weekly Digest Email. Most experimental — best built last when there's real data. No plan yet; needs `superpowers:brainstorming` first. |
+| **Wizard** | ✅ Shipped session 4 (PRs #64 + #68 + #70) | 5-step Signal Configuration Wizard at `/signals/setup`. Backend: `POST /workspace/signals/propose` + `/confirm`, `signal_proposal_events` telemetry, `app/prompts/propose_signals.py` v1. |
+| **Dashboard** | ✅ Shipped session 5 (PR #73) | Ranked People List at `/dashboard`. `incremental_trending` Celery task keeps `person_signal_summary` fresh within ~100 ms/post. |
+| **Backfill** | ✅ Shipped session 6 (PR #77), wiring completed session 7 (PR #104) | Day-One Backfill. Extension → bulk upsert → Celery Apify scrape → pipeline → completion email. |
+| **2.5 — Calibration evidence** | 🟡 PR #114 open | Session-8 output. Labeled 30-post dogfood dataset + findings report + Phase 2.6 evidence pool + reusable `calibrate_matching.py` harness. Proves the current post-only matching primitive scores near-randomly (F1 = 0.27, distributions inverted). Issue #113. |
+| **2.6 — Fit × Intent scoring** | ⬜ Design pending | New slice replacing the narrow "threshold calibration" framing of #106. Per-connection fit score from headline + company + role, combined multiplicatively with per-post intent score. Matches industry standard (6sense / Apollo / Demandbase). Required before Discovery can build on a useful signal. Next-session work: `superpowers:brainstorming` → `docs/phase-2-6/design.md`. |
+| **Discovery** (original final slice) | ⬜ Deferred until 2.6 ships | Ring 3 nightly HDBSCAN clustering for emerging topics + Weekly Digest Email. Clustering the current signal clusters noise; deferred until Phase 2.6 re-calibrates to F1 ≥ 0.6. |
 
 ### Phase 3 — ⬜ TBD (no design yet)
 
-Three rough directions in `CLAUDE.md`: real-time alerts, CRM integrations, team features. Run `superpowers:brainstorming` to scope when Phase 2 fully ships.
+Three rough directions in `CLAUDE.md`: real-time alerts, CRM integrations, team features. Deprioritized vs Phase 2.6. Run `superpowers:brainstorming` to scope when 2.6 ships.
 
 ---
 
@@ -99,14 +100,13 @@ Run `superpowers:brainstorming` with "scope Phase 3 of Sonar — real-time alert
 
 ## Open issues
 
-### Blockers on matching quality (from session 7 dogfood)
+### Matching quality — current state
 
-- **#105** — `relationship_score` returns 0.5 default instead of 0.9 for
-  degree=1 connections. Scorer isn't reading `Connection.degree`. Fix this
-  BEFORE #106 so calibration runs against correct scorer output.
-- **#106** — `matching_threshold` calibration: build golden eval dataset +
-  ROC analysis. The 0.72 default was never empirically tuned. Blocked on
-  #105.
+- **#105** — ✅ Closed by PR #112 (session 8). `Connection.relationship_score` was forced to 0.5 by ORM default, bypassing `DEGREE_BASE_SCORE` fallback. Migration 007 made the column nullable; backfill route sets it explicitly.
+- **#106** — 🟡 Superseded by #113 (to be closed with cross-link on session-9 merge of PR #114).
+- **#113** — 🔴 **Open + critical.** Current post-only matching primitive cannot discriminate buying intent from noise (F1 = 0.27, distributions inverted). Phase 2.6 Fit × Intent redesign required before further threshold work. Evidence in `eval/calibration/` (PR #114).
+- **#110** — Ring 1 matcher dead (signals are full phrases, matcher expects keywords). May disappear if Phase 2.6 reshapes signal shape; revisit during #113 design.
+- **#111** — Dashboard slider default 0.65 ignores workspace `matching_threshold`. Small frontend fix; pick up any time.
 
 ### Hardening (from session 7 dogfood)
 
@@ -137,6 +137,14 @@ Run `superpowers:brainstorming` with "scope Phase 3 of Sonar — real-time alert
 
 ## Session log (newest first, terse; full forensics live in git commits + PR descriptions)
 
+### Session 8 — 2026-04-20 — Login page, scorer fix, and the calibration finding that reshaped Phase 2
+
+- **Merged:** PR #109 (frontend `/login` page — returning users had no UI path back in). PR #112 (fixes issue #105: `Connection.relationship_score` was forced to `0.5` by ORM default, bypassing `DEGREE_BASE_SCORE` fallback; migration 007 makes column nullable).
+- **Open:** PR #114 — calibration harness + labeled 30-post dogfood dataset + findings report + Phase 2.6 evidence pool. Awaiting review/merge.
+- **Filed:** #110 (Ring 1 dead — phrases vs keywords), #111 (dashboard slider default), **#113 (matching model not viable — Phase 2.6 required)**.
+- **Calibration headline:** F1_max = 0.27 against hand-labeled dogfood dataset (4 yes / 26 no). Cosine distributions of real-matches and non-matches are *inverted* at the top — the #1 and #2 highest-cosine posts in the whole dataset are from competing vendors (NotifyVisitors CPO, MoEngage sales director). No threshold can recover usable precision + recall. The current post-only Ring 2 primitive cannot ship.
+- **Roadmap change:** Added Phase 2.5 (calibration evidence) and Phase 2.6 (Fit × Intent scoring) between Phase 2 Backfill and Phase 2 Discovery. Discovery deferred until 2.6 achieves F1 ≥ 0.6 against the same dataset. Issue #106 superseded by #113.
+
 ### Session 7 — 2026-04-20 — First live dogfood + Backfill Celery wiring + doc consolidation
 
 - **Merged:** PR #103 (Wizard: `max_tokens` → `max_completion_tokens` rename on gpt-5.4-mini; tolerate top-level-list LLM output). PR #104 (Backfill: wired day_one_backfill Celery task — the trigger endpoint had never been wired despite shipping with green tests; plus CORS widening for linkedin.com origin, Apify `profile_url` canonicalization, LinkedIn DOM-selector rewrite, Pydantic length truncation).
@@ -162,7 +170,7 @@ Run `superpowers:brainstorming` with "scope Phase 3 of Sonar — real-time alert
 cd ~/Downloads/Misc/projects/sonar
 docker compose up -d postgres redis api
 docker compose exec -T api alembic upgrade head
-docker compose exec -T api pytest -q       # expect 129 passing + 3 skipped
+docker compose exec -T api pytest -q       # expect 136 passing
 
 claude    # launch Claude Code from inside the Sonar dir so per-project memory loads
 ```
