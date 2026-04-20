@@ -1,6 +1,7 @@
 // frontend/src/App.tsx
 import { BrowserRouter, Routes, Route, Navigate, Link } from 'react-router-dom';
 import { Onboarding } from './pages/Onboarding';
+import { Login } from './pages/Login';
 import { AlertFeed } from './pages/AlertFeed';
 import { OpportunityBoard } from './pages/OpportunityBoard';
 import { Settings } from './pages/Settings';
@@ -28,6 +29,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Onboarding />} />
+        <Route path="/login" element={<Login />} />
         <Route path="/alerts" element={<RequireAuth><Nav /><AlertFeed /></RequireAuth>} />
         <Route path="/board" element={<RequireAuth><Nav /><OpportunityBoard /></RequireAuth>} />
         <Route path="/settings" element={<RequireAuth><Nav /><Settings /></RequireAuth>} />
