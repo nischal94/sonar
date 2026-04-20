@@ -7,6 +7,8 @@ capability_profile_versions.
 PROMPT_VERSION: bump on every content change. Logged alongside every call.
 """
 
+from __future__ import annotations
+
 PROMPT_VERSION = "v1"
 
 SYSTEM_PROMPT = """You are a B2B sales intelligence analyst. Given a company's
@@ -57,13 +59,13 @@ RESPONSE_JSON_SCHEMA = {
     "properties": {
         "icp": {
             "type": "string",
-            "minLength": 80,
-            "maxLength": 1200,
+            "minLength": 200,
+            "maxLength": 800,
         },
         "seller_mirror": {
             "type": "string",
-            "minLength": 80,
-            "maxLength": 1200,
+            "minLength": 200,
+            "maxLength": 800,
         },
     },
     "required": ["icp", "seller_mirror"],

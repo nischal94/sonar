@@ -35,10 +35,28 @@ def test_build_user_message_rejects_empty():
         mod.build_user_message(source_text="")
 
 
+def test_build_user_message_rejects_whitespace_only():
+    # Browser forms submitting blank space is the realistic footgun, not ""
+    with pytest.raises(ValueError):
+        mod.build_user_message(source_text="   \n\t   ")
+
+
 def test_response_schema_validates_well_formed_output():
     sample = {
-        "icp": "Marketing, growth, or e-commerce leaders at D2C or direct-to-consumer brands generating >$1M ARR. Not employees of martech SaaS vendors or competing agencies.",
-        "seller_mirror": "Founders, CEOs, CPOs, and sales directors at CDP / marketing-automation / customer-engagement SaaS companies. People whose LinkedIn headlines name-drop their own product.",
+        "icp": (
+            "Marketing, growth, or e-commerce leaders (Head of Growth, VP "
+            "Marketing, Director of E-commerce, CMO) at D2C or direct-to-consumer "
+            "brands generating roughly $1M to $50M ARR. Must own budget for "
+            "outbound or retention tooling. Not employees of martech SaaS "
+            "vendors, competing agencies, or consultancies serving martech."
+        ),
+        "seller_mirror": (
+            "Founders, CEOs, CPOs, Heads of Product, and sales directors at CDP, "
+            "marketing-automation, or customer-engagement SaaS companies. "
+            "LinkedIn headlines typically name-drop the product (e.g., 'CEO at "
+            "Acme CDP'), include stage signals like 'Series A' or 'YC W23', and "
+            "reference direct competitors or adjacent category terms."
+        ),
     }
     validate(instance=sample, schema=mod.RESPONSE_JSON_SCHEMA)
 
