@@ -35,6 +35,18 @@ from app.services.embedding import get_embedding_provider  # noqa: E402
 from app.services.fit_scorer import compute_fit_score  # noqa: E402
 
 
+# Commit every COMMIT_BATCH connections so a mid-loop embedding failure
+# doesn't lose all prior progress. At 10k connections a transient 429/503
+# otherwise rolls back the entire session.
+COMMIT_BATCH = 100
+
+# Rough cost estimate for operator-facing logging. text-embedding-3-small
+# is billed per input token; we approximate at ~50 tokens per connection
+# (headline + company) × $0.02 / 1M tokens = ~$0.000001 per call. The
+# constant may drift with OpenAI pricing; this is a signal, not a budget.
+_EMBED_COST_PER_CALL_USD = 0.000001
+
+
 async def run(
     db, workspace_id: UUID, *, recompute_all: bool = False, lambda_: float = 0.3
 ) -> dict:
@@ -65,28 +77,33 @@ async def run(
     icp_emb = list(profile.icp_embedding)
     mirror_emb = list(profile.seller_mirror_embedding)
 
+    total = len(connections)
     updated = 0
     skipped_empty = 0
-    for conn in connections:
+    for i, conn in enumerate(connections, 1):
         text = f"{conn.headline or ''} {conn.company or ''}".strip()
         if not text:
             conn.fit_score = 0.0
             skipped_empty += 1
-            continue
-        conn_emb = await emb.embed(text)
-        conn.fit_score = compute_fit_score(
-            icp_embedding=icp_emb,
-            seller_mirror_embedding=mirror_emb,
-            connection_embedding=conn_emb,
-            lambda_=lambda_,
-        )
-        updated += 1
+        else:
+            conn_emb = await emb.embed(text)
+            conn.fit_score = compute_fit_score(
+                icp_embedding=icp_emb,
+                seller_mirror_embedding=mirror_emb,
+                connection_embedding=conn_emb,
+                lambda_=lambda_,
+            )
+            updated += 1
+        if i % COMMIT_BATCH == 0:
+            await db.commit()
+            print(f"[backfill_fit_scores] progress {i}/{total}")
 
     await db.commit()
     return {
         "updated": updated,
         "skipped_empty": skipped_empty,
-        "total": len(connections),
+        "total": total,
+        "estimated_cost_usd": round(updated * _EMBED_COST_PER_CALL_USD, 6),
     }
 
 
@@ -107,16 +124,20 @@ async def _main():
     engine = create_async_engine(settings.database_url)
     Session = async_sessionmaker(engine, expire_on_commit=False)
 
-    async with Session() as db:
-        summary = await run(
-            db,
-            workspace_id=args.workspace_id,
-            recompute_all=args.recompute_all,
-            lambda_=args.lambda_,
-        )
-        print(f"[backfill_fit_scores] {summary}")
-
-    await engine.dispose()
+    try:
+        async with Session() as db:
+            summary = await run(
+                db,
+                workspace_id=args.workspace_id,
+                recompute_all=args.recompute_all,
+                lambda_=args.lambda_,
+            )
+            print(f"[backfill_fit_scores] done: {summary}")
+    except (ValueError, RuntimeError) as e:
+        print(f"[backfill_fit_scores] Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    finally:
+        await engine.dispose()
 
 
 if __name__ == "__main__":
