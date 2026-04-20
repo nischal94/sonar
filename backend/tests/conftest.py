@@ -1,10 +1,20 @@
 import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
+from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 from app.main import app
 from app.database import Base, get_db
 from app.config import get_settings
+
+
+@pytest.fixture
+def sync_engine():
+    """Synchronous engine for DDL introspection. Separate from the async test engine."""
+    url = get_settings().database_url.replace("+asyncpg", "")
+    engine = create_engine(url)
+    yield engine
+    engine.dispose()
 
 
 @pytest.fixture(autouse=True)
@@ -15,6 +25,7 @@ def _reset_provider_singletons():
     prior test's real client). Closes issue #22."""
     yield
     from app.services import embedding, llm
+
     embedding._provider = None
     llm._openai = None
     llm._groq = None
@@ -36,6 +47,7 @@ def _reset_provider_singletons():
 # it was removed as part of the Phase 2 Foundation pre-merge cleanup.
 # Configured via `pyproject.toml [tool.pytest.ini_options]`.
 
+
 @pytest_asyncio.fixture
 async def test_engine():
     # Swap only the trailing database name (not any earlier "/sonar" in credentials/host)
@@ -48,22 +60,28 @@ async def test_engine():
     yield engine
     await engine.dispose()
 
+
 @pytest_asyncio.fixture
 async def db_session(test_engine):
     TestSession = async_sessionmaker(test_engine, expire_on_commit=False)
     async with TestSession() as session:
         yield session
 
+
 @pytest_asyncio.fixture
 async def client(db_session):
     async def override_get_db():
         yield db_session
+
     app.dependency_overrides[get_db] = override_get_db
     # Reset slowapi counters per-test — ASGITransport reuses one client IP,
     # so without this any test hitting a rate-limited endpoint accumulates
     # counters that would leak into subsequent tests.
     from app.rate_limit import limiter
+
     limiter.reset()
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as c:
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as c:
         yield c
     app.dependency_overrides.clear()
