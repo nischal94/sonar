@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models.connection import Connection
 from app.models.user import User
 from app.models.workspace import Workspace
+from app.services.scorer import DEGREE_BASE_SCORE
 from app.rate_limit import limiter
 from app.routers.auth import get_current_user
 from app.schemas.backfill import (
@@ -73,6 +74,7 @@ async def connections_bulk(
                     company=row.company,
                     profile_url=row.profile_url,
                     degree=1,
+                    relationship_score=DEGREE_BASE_SCORE[1],
                 )
             )
 

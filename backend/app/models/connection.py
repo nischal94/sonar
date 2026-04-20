@@ -34,7 +34,7 @@ class Connection(Base):
     seniority = Column(String)
     degree = Column(Integer, nullable=False)
     mutual_count = Column(Integer, nullable=False, default=0, server_default="0")
-    relationship_score = Column(Float, nullable=False, default=0.5)
+    relationship_score = Column(Float, nullable=True)
     has_interacted = Column(Boolean, nullable=False, default=False)
     first_seen_at = Column(TIMESTAMPTZ, nullable=False, server_default="now()")
     last_active_at = Column(TIMESTAMPTZ)
