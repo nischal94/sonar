@@ -30,6 +30,11 @@ class ProfileExtractResponse(BaseModel):
     seller_mirror: str
 
 
+class UpdateIcpRequest(BaseModel):
+    icp: str | None = None
+    seller_mirror: str | None = None
+
+
 @router.post("/extract", response_model=ProfileExtractResponse)
 async def extract_profile(
     body: ProfileExtractRequest,
@@ -124,3 +129,68 @@ async def extract_profile(
         icp=icp_text,
         seller_mirror=seller_mirror_text,
     )
+
+
+@router.post("/update-icp")
+async def update_icp(
+    body: UpdateIcpRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    emb: EmbeddingProvider = Depends(get_embedding_provider),
+):
+    """Update the active CapabilityProfileVersion's ICP and/or seller_mirror text.
+
+    Re-embeds whichever fields are provided. At least one field must be present.
+    The active version is identified by workspace_id + is_active=True.
+    """
+    if not body.icp and not body.seller_mirror:
+        raise HTTPException(status_code=400, detail="Provide icp and/or seller_mirror")
+
+    # Resolve the active version id first
+    id_result = await db.execute(
+        select(CapabilityProfileVersion.id)
+        .where(CapabilityProfileVersion.workspace_id == current_user.workspace_id)
+        .where(CapabilityProfileVersion.is_active.is_(True))
+    )
+    version_id = id_result.scalar()
+    if version_id is None:
+        raise HTTPException(
+            status_code=404, detail="No active capability profile found"
+        )
+
+    # Update text fields via ORM (no vector columns here)
+    text_fields: dict = {}
+    if body.icp:
+        text_fields["icp"] = body.icp
+    if body.seller_mirror:
+        text_fields["seller_mirror"] = body.seller_mirror
+
+    await db.execute(
+        update(CapabilityProfileVersion)
+        .where(CapabilityProfileVersion.id == version_id)
+        .values(**text_fields)
+    )
+
+    # Re-embed via parameterized raw SQL (same pattern as /profile/extract)
+    set_clauses = []
+    params: dict = {"id": str(version_id)}
+    if body.icp:
+        icp_embedding = await emb.embed(body.icp)
+        set_clauses.append("icp_embedding = :icp_emb")
+        params["icp_emb"] = str(icp_embedding)
+    if body.seller_mirror:
+        seller_mirror_embedding = await emb.embed(body.seller_mirror)
+        set_clauses.append("seller_mirror_embedding = :mirror_emb")
+        params["mirror_emb"] = str(seller_mirror_embedding)
+
+    await db.execute(
+        text(
+            "UPDATE capability_profile_versions SET "
+            + ", ".join(set_clauses)
+            + " WHERE id = :id"
+        ),
+        params,
+    )
+
+    await db.commit()
+    return {"ok": True}
