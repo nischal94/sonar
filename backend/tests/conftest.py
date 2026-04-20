@@ -88,6 +88,102 @@ async def client(db_session):
 
 
 @pytest_asyncio.fixture
+async def pipeline_setup(db_session):
+    """Factory: returns an async callable that creates a workspace + user +
+    capability profile (with ICP/seller_mirror embeddings) + connection + post.
+    Returns (workspace_id, post_id, connection_id)."""
+    from datetime import datetime, timezone
+    from uuid import uuid4
+    from sqlalchemy import text as sql_text
+
+    async def _factory(*, use_hybrid: bool):
+        from app.models.workspace import Workspace, CapabilityProfileVersion
+        from app.models.user import User
+        from app.models.connection import Connection
+        from app.models.post import Post
+
+        ws = Workspace(
+            name="PipelineTestWS",
+            plan_tier="starter",
+            matching_threshold=0.1,  # low so scores pass through
+            use_hybrid_scoring=use_hybrid,
+        )
+        db_session.add(ws)
+        await db_session.flush()
+
+        user = User(
+            email=f"u-{uuid4()}@test",
+            hashed_password="x",
+            workspace_id=ws.id,
+        )
+        db_session.add(user)
+        await db_session.flush()
+
+        profile = CapabilityProfileVersion(
+            workspace_id=ws.id,
+            version=1,
+            raw_text="Test capability: customer data platform for D2C brands.",
+            source="text",
+            signal_keywords=["cdp"],
+            anti_keywords=[],
+            icp="Marketing and growth leaders at D2C brands with >$1M ARR. Not competing martech vendors.",
+            seller_mirror="Founders, CEOs, CPOs at martech SaaS companies.",
+            is_active=True,
+        )
+        db_session.add(profile)
+        await db_session.flush()
+
+        # Populate the three pgvector columns via parameterized SQL.
+        fake_emb = "[" + ",".join(["0.1"] * 1536) + "]"
+        await db_session.execute(
+            sql_text(
+                "UPDATE capability_profile_versions "
+                "SET embedding = CAST(:e AS vector), "
+                "    icp_embedding = CAST(:e AS vector), "
+                "    seller_mirror_embedding = CAST(:e AS vector) "
+                "WHERE id = :id"
+            ),
+            {"e": fake_emb, "id": str(profile.id)},
+        )
+
+        conn = Connection(
+            workspace_id=ws.id,
+            user_id=user.id,
+            linkedin_id=f"li-{uuid4()}",
+            name="Test Buyer",
+            headline="Head of Growth at Acme D2C",
+            company="Acme D2C",
+            degree=2,
+        )
+        db_session.add(conn)
+        await db_session.flush()
+
+        post = Post(
+            workspace_id=ws.id,
+            connection_id=conn.id,
+            linkedin_post_id=f"p-{uuid4()}",
+            content="Looking at customer data tooling for our D2C stack.",
+            post_type="post",
+            source="extension",
+            posted_at=datetime.now(timezone.utc),
+            ingested_at=datetime.now(timezone.utc),
+        )
+        db_session.add(post)
+        await db_session.flush()
+
+        # Populate post embedding.
+        await db_session.execute(
+            sql_text("UPDATE posts SET embedding = CAST(:e AS vector) WHERE id = :id"),
+            {"e": fake_emb, "id": str(post.id)},
+        )
+        await db_session.commit()
+
+        return ws.id, post.id, conn.id
+
+    return _factory
+
+
+@pytest_asyncio.fixture
 async def workspace_id(db_session):
     """Create a test workspace and return its UUID."""
     from app.models.workspace import Workspace
