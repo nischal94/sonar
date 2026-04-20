@@ -220,7 +220,7 @@ In my view, AI has reduced effort and improved Time to Market. AI will do the li
 PS: AI hasn’t been recruited to write this. I haven’t outsourced my critical thinking, logical deduction or writing yet.
 ```
 
-**Label:** `[ ]`  ← replace with `[x]` if this is a real intent signal
+**Label:** `[x]`  ← replace with `[x]` if this is a real intent signal
 
 **Reason (optional):**
 
@@ -638,7 +638,7 @@ Welcoming Parineeti Chopra as OZi’s brand ambassador felt like a natural step 
 Proud of the team for bringing our first brand campaign and film to life.
 ```
 
-**Label:** `[ ]`  ← replace with `[x]` if this is a real intent signal
+**Label:** `[x]`  ← replace with `[x]` if this is a real intent signal
 
 **Reason (optional):**
 
@@ -754,7 +754,7 @@ Watch this wholesome episode.
 Also stay tuned for a lot more.
 ```
 
-**Label:** `[ ]`  ← replace with `[x]` if this is a real intent signal
+**Label:** `[x]`  ← replace with `[x]` if this is a real intent signal
 
 **Reason (optional):**
 
@@ -1057,7 +1057,7 @@ And now with the first success, we already have Loopieheads from across the coun
 Huge shoutout to Rini Goel, Kavish Sharma, Broadway, Chicken Masala Band and all others Loopieheads on this beautiful memory.
 ```
 
-**Label:** `[ ]`  ← replace with `[x]` if this is a real intent signal
+**Label:** `[x]`  ← replace with `[x]` if this is a real intent signal
 
 **Reason (optional):**
 
