@@ -184,6 +184,135 @@ async def pipeline_setup(db_session):
 
 
 @pytest_asyncio.fixture
+async def workspace_with_icp(db_session):
+    """Workspace + active CapabilityProfileVersion with icp/seller_mirror embeddings populated.
+    Returns the workspace_id (UUID)."""
+    from uuid import uuid4
+    from sqlalchemy import text as sql_text
+    from app.models.workspace import Workspace, CapabilityProfileVersion
+    from app.models.user import User
+
+    ws = Workspace(name="BackfillTest", plan_tier="starter", use_hybrid_scoring=True)
+    db_session.add(ws)
+    await db_session.flush()
+
+    user = User(email=f"u-{uuid4()}@test", hashed_password="x", workspace_id=ws.id)
+    db_session.add(user)
+
+    profile = CapabilityProfileVersion(
+        workspace_id=ws.id,
+        version=1,
+        raw_text="...",
+        source="text",
+        signal_keywords=[],
+        anti_keywords=[],
+        icp="ICP text.",
+        seller_mirror="Seller mirror text.",
+        is_active=True,
+    )
+    db_session.add(profile)
+    await db_session.flush()
+
+    fake_emb = "[" + ",".join(["0.1"] * 1536) + "]"
+    await db_session.execute(
+        sql_text(
+            "UPDATE capability_profile_versions "
+            "SET embedding = CAST(:e AS vector), "
+            "    icp_embedding = CAST(:e AS vector), "
+            "    seller_mirror_embedding = CAST(:e AS vector) "
+            "WHERE id = :id"
+        ),
+        {"e": fake_emb, "id": str(profile.id)},
+    )
+    # Capture user_id before commit expires the ORM instance.
+    user_id = user.id
+    await db_session.commit()
+    # Stash user_id on a plain object so connection fixtures can reference it
+    # without re-fetching. This is a test-only pattern; production code never
+    # touches _test_user_id.
+    import types
+
+    result = types.SimpleNamespace(id=ws.id, _test_user_id=user_id)
+    return result
+
+
+async def _add_connection(
+    db, workspace_id, user_id, *, headline: str, company: str, fit_score=None
+):
+    from uuid import uuid4
+    from app.models.connection import Connection
+
+    conn = Connection(
+        workspace_id=workspace_id,
+        user_id=user_id,
+        linkedin_id=f"li-{uuid4()}",
+        name="N",
+        headline=headline,
+        company=company,
+        degree=2,
+        fit_score=fit_score,
+    )
+    db.add(conn)
+    await db.flush()
+    return conn.id
+
+
+@pytest_asyncio.fixture
+async def seeded_connections(db_session, workspace_with_icp):
+    """3 connections in the workspace, all with fit_score=None."""
+    ids = []
+    for h, c in [
+        ("Head of Growth at Acme D2C", "Acme D2C"),
+        ("CMO", "Retail Co"),
+        ("VP Marketing", "BrandX"),
+    ]:
+        ids.append(
+            await _add_connection(
+                db_session,
+                workspace_with_icp.id,
+                workspace_with_icp._test_user_id,
+                headline=h,
+                company=c,
+            )
+        )
+    await db_session.commit()
+    return ids
+
+
+@pytest_asyncio.fixture
+async def seeded_connections_mixed(db_session, workspace_with_icp):
+    """Mixed: 2 connections without fit_score + 1 with fit_score=0.5 pre-populated."""
+    ids = [
+        await _add_connection(
+            db_session,
+            workspace_with_icp.id,
+            workspace_with_icp._test_user_id,
+            headline="CMO",
+            company="X",
+            fit_score=None,
+        ),
+        await _add_connection(
+            db_session,
+            workspace_with_icp.id,
+            workspace_with_icp._test_user_id,
+            headline="VP Growth",
+            company="Y",
+            fit_score=None,
+        ),
+        await _add_connection(
+            db_session,
+            workspace_with_icp.id,
+            workspace_with_icp._test_user_id,
+            headline="Founder",
+            company="Z",
+            fit_score=0.5,
+        ),
+    ]
+    await db_session.commit()
+    return ids
+
+
+@pytest_asyncio.fixture
 async def workspace_id(db_session):
     """Create a test workspace and return its UUID."""
     from app.models.workspace import Workspace
