@@ -125,6 +125,28 @@ async def test_update_icp_requires_at_least_one_field(
 
 
 @pytest.mark.asyncio
+async def test_update_icp_rejects_whitespace_only(
+    client: AsyncClient,
+    db_session,
+    auth_headers,
+    workspace_id,
+):
+    """Whitespace-only strings must be treated as missing, not embedded.
+    Without the strip + non-empty check, the endpoint would happily embed
+    "   \\n\\t " and corrupt the active profile's ICP signal."""
+    await _seed_active_version(db_session, workspace_id)
+
+    resp = await client.post(
+        "/profile/update-icp",
+        json={"icp": "   ", "seller_mirror": "\n\t "},
+        headers=auth_headers,
+    )
+
+    assert resp.status_code == 400
+    assert "non-empty" in resp.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
 async def test_update_icp_accepts_icp_only(
     client: AsyncClient,
     db_session,

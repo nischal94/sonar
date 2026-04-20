@@ -314,7 +314,15 @@ export function SignalConfig() {
           </div>
           {error && <div style={errorStyle}>{error}</div>}
           <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-            <button style={secondaryBtn} onClick={() => setStep(2)}>
+            <button
+              style={secondaryBtn}
+              onClick={() => {
+                // Reset the dirty flag so a subsequent re-extract starts
+                // clean rather than carrying over edits the user abandoned.
+                setIcpEdited(false);
+                setStep(2);
+              }}
+            >
               Back
             </button>
             <button style={primaryBtn} disabled={loading} onClick={handleIcpNext}>

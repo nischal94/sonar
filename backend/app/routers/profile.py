@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, func, text
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl
 from app.database import get_db
 from app.models.workspace import Workspace, CapabilityProfileVersion
 from app.models.user import User
@@ -31,8 +31,10 @@ class ProfileExtractResponse(BaseModel):
 
 
 class UpdateIcpRequest(BaseModel):
-    icp: str | None = None
-    seller_mirror: str | None = None
+    # max_length ~4000 chars ≈ well under text-embedding-3-small's 8191-token
+    # window and keeps a single request from burning unbounded LLM cost.
+    icp: str | None = Field(default=None, max_length=4000)
+    seller_mirror: str | None = Field(default=None, max_length=4000)
 
 
 @router.post("/extract", response_model=ProfileExtractResponse)
@@ -140,11 +142,19 @@ async def update_icp(
 ):
     """Update the active CapabilityProfileVersion's ICP and/or seller_mirror text.
 
-    Re-embeds whichever fields are provided. At least one field must be present.
-    The active version is identified by workspace_id + is_active=True.
+    Re-embeds whichever fields are provided. At least one field must be a
+    non-whitespace string. The active version is identified by
+    workspace_id + is_active=True.
     """
-    if not body.icp and not body.seller_mirror:
-        raise HTTPException(status_code=400, detail="Provide icp and/or seller_mirror")
+    # Normalize: strip whitespace, treat "" and "   " as equivalent to missing.
+    # Pydantic's max_length guards the upper bound; this guards the lower.
+    icp_clean = body.icp.strip() if body.icp else None
+    mirror_clean = body.seller_mirror.strip() if body.seller_mirror else None
+    if not icp_clean and not mirror_clean:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide at least one non-empty icp or seller_mirror",
+        )
 
     # Resolve the active version id first
     id_result = await db.execute(
@@ -158,12 +168,19 @@ async def update_icp(
             status_code=404, detail="No active capability profile found"
         )
 
-    # Update text fields via ORM (no vector columns here)
+    # Phase 1 — compute all embeddings FIRST, before any DB writes. If any
+    # embed() call raises (network, 429, 500), no partial write escapes.
+    # Do not re-order this block to interleave embeds with SQL writes.
+    icp_embedding = await emb.embed(icp_clean) if icp_clean else None
+    mirror_embedding = await emb.embed(mirror_clean) if mirror_clean else None
+
+    # Phase 2 — issue all DB writes in the same transaction. SQLAlchemy
+    # rolls back if any step below raises before commit.
     text_fields: dict = {}
-    if body.icp:
-        text_fields["icp"] = body.icp
-    if body.seller_mirror:
-        text_fields["seller_mirror"] = body.seller_mirror
+    if icp_clean:
+        text_fields["icp"] = icp_clean
+    if mirror_clean:
+        text_fields["seller_mirror"] = mirror_clean
 
     await db.execute(
         update(CapabilityProfileVersion)
@@ -171,17 +188,14 @@ async def update_icp(
         .values(**text_fields)
     )
 
-    # Re-embed via parameterized raw SQL (same pattern as /profile/extract)
     set_clauses = []
     params: dict = {"id": str(version_id)}
-    if body.icp:
-        icp_embedding = await emb.embed(body.icp)
+    if icp_embedding is not None:
         set_clauses.append("icp_embedding = :icp_emb")
         params["icp_emb"] = str(icp_embedding)
-    if body.seller_mirror:
-        seller_mirror_embedding = await emb.embed(body.seller_mirror)
+    if mirror_embedding is not None:
         set_clauses.append("seller_mirror_embedding = :mirror_emb")
-        params["mirror_emb"] = str(seller_mirror_embedding)
+        params["mirror_emb"] = str(mirror_embedding)
 
     await db.execute(
         text(
