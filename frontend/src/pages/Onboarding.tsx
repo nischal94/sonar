@@ -1,6 +1,6 @@
 // frontend/src/pages/Onboarding.tsx
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { authAPI, profileAPI } from '../api/client';
 
 export function Onboarding() {
@@ -60,6 +60,12 @@ export function Onboarding() {
           <button type="submit" disabled={loading} style={btnStyle}>
             {loading ? 'Creating...' : 'Create Workspace →'}
           </button>
+          <p style={{ color: '#666', fontSize: 14, marginTop: 16, textAlign: 'center' }}>
+            Already have an account?{' '}
+            <Link to="/login" style={{ color: '#0077b5', textDecoration: 'none' }}>
+              Sign in
+            </Link>
+          </p>
         </form>
       )}
 
