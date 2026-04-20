@@ -58,11 +58,14 @@ async def test_full_pipeline_end_to_end(client):
     # with `from ... import ...` because the override layer sits above
     # Python's import binding. See #21.
     #
-    # The handler makes two LLM calls: one for capability extraction (no system
-    # prompt) and one for ICP+seller_mirror (system prompt contains "sales
-    # intelligence analyst"). Route on that signal so each call gets valid JSON.
+    # The handler makes two LLM calls: one for capability extraction and
+    # one for ICP+seller_mirror. Route by reference equality on the known
+    # prompt constant — a substring match would silently misroute if the
+    # prompt text is ever reworded, surfacing as a confusing parse error.
+    from app.prompts import extract_icp_and_seller_mirror as icp_prompt
+
     async def _fake_complete(prompt, model=None, *, system=None, max_tokens=2048):
-        if system and "sales intelligence analyst" in system.lower():
+        if system is icp_prompt.SYSTEM_PROMPT:
             return mock_icp_json
         return mock_profile_json
 

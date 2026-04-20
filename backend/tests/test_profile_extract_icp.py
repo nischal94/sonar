@@ -7,6 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.models.workspace import CapabilityProfileVersion
+from app.prompts import extract_icp_and_seller_mirror as icp_prompt
 
 
 class _FakeLLMForICP:
@@ -17,7 +18,10 @@ class _FakeLLMForICP:
 
     async def complete(self, prompt, model=None, *, system=None, max_tokens=2048):
         self.calls.append(("complete", system, prompt[:60]))
-        if "sales intelligence analyst" in (system or "").lower():
+        # Route by reference equality on the known prompt constant so that
+        # any future rewording of SYSTEM_PROMPT doesn't silently misroute
+        # this fake and surface as a confusing parse error.
+        if system is icp_prompt.SYSTEM_PROMPT:
             # ICP prompt
             return json.dumps(
                 {
@@ -72,8 +76,14 @@ async def test_profile_extract_persists_icp_and_seller_mirror(
             headers=auth_headers,
         )
     finally:
+        # Exhaustive cleanup — don't rely on the outer `client` fixture's
+        # dependency_overrides.clear() to sweep get_current_user, since that
+        # couples teardown safety to fixture ordering.
+        from app.routers.auth import get_current_user
+
         app.dependency_overrides.pop(get_llm_client, None)
         app.dependency_overrides.pop(get_embedding_provider, None)
+        app.dependency_overrides.pop(get_current_user, None)
 
     assert resp.status_code == 200, resp.text
     body = resp.json()
