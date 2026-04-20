@@ -17,7 +17,7 @@ like on LinkedIn.
 
 Rules for the ICP paragraph:
 1. Name the buyer's role, seniority, and company shape (industry, stage, size).
-2. Phrase contrastively -- explicitly name who the buyer is NOT. Example: "Not
+2. Phrase contrastively — explicitly name who the buyer is NOT. Example: "Not
    employees of martech SaaS vendors or competing agencies."
 3. Written in plain English. No bullet lists, no headers. One dense paragraph.
 4. 50-120 words.
@@ -25,7 +25,7 @@ Rules for the ICP paragraph:
 Rules for the seller-mirror paragraph:
 1. Describe what other SELLERS of this same capability look like on LinkedIn.
    Who would a competitor's founder, CEO, CPO, or sales director look like?
-2. Focus on linguistic tells in LinkedIn headlines -- product name-drops,
+2. Focus on linguistic tells in LinkedIn headlines — product name-drops,
    stage signals ("Series B", "YC W22"), role words ("CEO", "Founder",
    "Head of Sales at X").
 3. This paragraph is SUBTRACTED from the ICP signal during scoring, so
