@@ -52,21 +52,23 @@ Every decision below is locked. Plan-B escape hatches are noted where relevant b
 
 **Why:** matches the "just a URL and go" onboarding promise. All three tiers converge on the same downstream object (a paragraph of ICP text), so downstream code is tier-agnostic.
 
-### 3.2 Contrastive ICP phrasing — one text input, no separate anti-list
+### 3.2 Two-term fit: contrastive ICP + subtractive seller-mirror (both v1)
 
-Extracted ICP paragraphs include explicit contrast:
-
-> "Marketing, growth, and product leaders at D2C and B2C brands running paid acquisition and lifecycle campaigns. **Not** employees of martech SaaS vendors, agencies, or consultancies selling to the same buyers."
-
-**Why:** if the positive ICP is specified tightly enough, disqualifiers come for free through the same cosine computation. Contrastive phrasing compresses both poles into a single text input. No second model, no separate anti-list to maintain, no extra onboarding step.
-
-**Plan B (documented, not built):** if calibration shows contrastive phrasing is insufficient and seller-language leaks through, fall back to a subtractive seller-mirror term:
+Fit score combines a positive term and a negative term:
 
 ```
-fit_score = cos(ICP, connection) − λ × cos(seller_mirror, connection)
+fit_score = cos(ICP_embedding, connection_embedding)
+          − λ × cos(seller_mirror_embedding, connection_embedding)
 ```
 
-where `seller_mirror` is an auto-inferred description of "what other providers of the same service look like" (the linguistic mirror of the workspace capability). Adds one embedding per connection, one cosine subtraction, one tunable λ.
+- **ICP paragraph (positive term):** LLM-extracted from the workspace input. Phrased contrastively — it names who you *do* sell to AND explicitly names who you do *not* (e.g. *"…Not employees of martech SaaS vendors or competing agencies"*).
+- **Seller-mirror paragraph (negative term):** LLM-extracted from the same input, describing *"what other sellers of this capability look like on LinkedIn"* — the linguistic mirror of the workspace's own capability. Subtracted with a small positive weight `λ` (default `0.3`, tunable during calibration).
+
+**Why both, not contrastive alone:** embedding models handle negation imperfectly. A string like *"Not employees of martech SaaS vendors"* often scores *closer* to competing-vendor language in embedding space because the tokens `employees / martech / SaaS / vendors` still appear. The subtractive term removes this dependency on the embedding model understanding negation — it explicitly subtracts a seller-shape signal.
+
+**Why this is cheap:** one additional LLM call per workspace (seller-mirror extraction, amortized across all connections), one additional embedding per connection at backfill time (~$0.00002 each), one subtraction at scoring time. No new infra.
+
+**Why keep the contrastive ICP too:** the contrastive phrasing can't hurt, and calibration will tell us which term (ICP-positive, seller-mirror-negative, or both) actually carries the load. If one term dominates, we can simplify in a follow-on.
 
 ### 3.3 Connection-side fit input — headline + company
 
@@ -97,7 +99,7 @@ final_score = fit_score × intent_score
 - Ring 2 cosine relevance (with Ring 1 keyword boost): weight 0.7
 - Timing decay (linear over 24h): weight 0.3
 
-**Relationship degree moves to display layer.** It already exists as a 1st/2nd degree filter on the dashboard. Keeping it in the scoring math double-counted; it's about the user's *access* to the person, not about whether the person is a buyer showing intent. A 3rd-degree connection showing high fit × high intent should rank above a 1st-degree connection showing low fit × low intent — the current scorer does the opposite.
+**Relationship degree moves to display layer.** It already exists as a 1st/2nd degree filter on the dashboard — that's the right home. Keeping it in the scoring math double-counted; degree is about the user's *access* to the person (can you DM them?), not about whether the person is a buyer showing intent. A 3rd-degree connection showing high fit × high intent should rank above a 1st-degree connection showing low fit × low intent — the current scorer does the opposite. Degree filtering on the dashboard already lets the user restrict to their reachable set.
 
 ### 3.6 Prior-post memory — not in v1
 
@@ -137,16 +139,17 @@ All three must hold on *both* the Dwao and CleverTap labeled sets:
 ### Component graph
 
 ```
-Workspace URL ──► LLM (extract_icp prompt) ──► ICP paragraph ──► OpenAI embed ──► workspace.icp_embedding
-                                                                                        │
-                                                                                        │
-Connection.headline + .company ──► OpenAI embed ──► connection.fit_score ◄──────────────┘
-                                                          │
-                                                          │
-Post.content ──► Ring 1 keyword + Ring 2 cosine ──► intent_score
-                                                          │
-                                                          ▼
-                                            final_score = fit_score × intent_score
+                              ┌──► ICP paragraph ───► embed ───► workspace.icp_embedding
+Workspace input ──► LLM ──────┤                                              │
+(URL / doc / text)            └──► Seller-mirror ───► embed ───► workspace.seller_mirror_embedding
+                                                                             │
+                                                                             ▼
+Connection.headline + .company ──► embed ──► pos − λ·neg ──► connection.fit_score
+                                                                             │
+Post.content ──► Ring 1 keyword + Ring 2 cosine ──► intent_score             │
+                                                          │                  │
+                                                          ▼                  │
+                                         final_score = fit_score × intent_score
                                                           │
                                                           ▼
                                                  alert / dashboard
@@ -161,15 +164,18 @@ ALTER TABLE connections ADD COLUMN fit_score REAL NULL;
 -- Migration 009
 ALTER TABLE workspaces ADD COLUMN use_hybrid_scoring BOOLEAN NOT NULL DEFAULT FALSE;
 
--- Migration 010
+-- Migration 010 — ICP + seller-mirror text and their embeddings
 ALTER TABLE capability_profile_versions ADD COLUMN icp TEXT NULL;
+ALTER TABLE capability_profile_versions ADD COLUMN seller_mirror TEXT NULL;
+ALTER TABLE capability_profile_versions ADD COLUMN icp_embedding vector(1536) NULL;
+ALTER TABLE capability_profile_versions ADD COLUMN seller_mirror_embedding vector(1536) NULL;
 ```
 
 No data loss, no downtime, no breaking changes. Existing workspaces run the existing scorer until explicitly flipped.
 
 ### Code changes (rough map)
 
-- **New:** `app/prompts/extract_icp.py` (LLM prompt module, versioned like `propose_signals.py`)
+- **New:** `app/prompts/extract_icp.py` and `app/prompts/extract_seller_mirror.py` (LLM prompt modules, versioned like `propose_signals.py`; can be combined into a single dual-output prompt if that proves more reliable)
 - **New:** `app/services/fit_scorer.py` (`compute_fit_score`, `compute_hybrid_score`)
 - **Extended:** `app/routers/profile.py` `extract()` endpoint — return `icp` alongside `capability`
 - **Extended:** `app/workers/pipeline.py` — branch on `workspace.use_hybrid_scoring`
@@ -183,14 +189,14 @@ No data loss, no downtime, no breaking changes. Existing workspaces run the exis
 
 Re-use `backend/scripts/calibrate_matching.py` against the session-8 dataset:
 
-1. Extract Dwao ICP via Tier 1 (URL). Review/tighten via Tier 2/3 if obviously weak.
-2. Compute `fit_score` for each of the 49 dogfood connections.
+1. Extract Dwao ICP + seller-mirror via Tier 1 (URL). Review/tighten the ICP via Tier 2/3 if obviously weak.
+2. Compute `fit_score` (positive − λ·negative) for each of the 49 dogfood connections. Sweep λ ∈ {0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0} to find the value that best separates buyer from seller connections.
 3. Compute `intent_score` for each of the 30 labeled posts (same cosines as session 8, minus the relationship axis).
-4. Compute `final_score` for each `(post, connection)` pair.
-5. Run analyzer, measure Precision@5, Recall, top-5 competitor count.
-6. Repeat 1–5 with CleverTap ICP (extracted from `clevertap.com`), re-labeling the same 30 posts under the CleverTap lens (~15 min of labeling time).
-7. If both pass the DoD: flip `use_hybrid_scoring=True` for the dogfood workspace, ship Phase 2.6.
-8. If either fails specifically on seller-confusion cases: implement Plan B (subtractive seller-mirror term), re-calibrate, repeat.
+4. Compute `final_score = fit_score × intent_score` for each `(post, connection)` pair.
+5. Run analyzer, measure Precision@5, Recall, and top-5 competitor count at each λ. Pick the λ that maximizes Precision@5 while holding Recall ≥ 0.5.
+6. Repeat 1–5 with CleverTap ICP + seller-mirror (extracted from `clevertap.com`), re-labeling the same 30 posts under the CleverTap lens (~15 min of labeling time).
+7. If both pass the DoD at the chosen λ: flip `use_hybrid_scoring=True` for the dogfood workspace, ship Phase 2.6.
+8. If either fails: diagnose via top-N analysis. Likely culprits and their fixes: (a) encoder asymmetry — upgrade to `text-embedding-3-large`; (b) weak ICP extraction — improve the prompt or add a tier-2 review step in the wizard; (c) λ sweep finds no usable value — indicates seller-mirror and ICP embeddings aren't discriminating; try asymmetric retrieval model (BGE / E5) in a follow-on slice.
 
 ---
 
@@ -209,10 +215,10 @@ Re-use `backend/scripts/calibrate_matching.py` against the session-8 dataset:
 
 ## 7. Risks
 
-1. **Asymmetric fit comparison.** ICP paragraph (~50–100 words) vs. headline+company (~20 words) is asymmetric in the same direction that hurt intent scoring. Mitigation: Precision@K is less sensitive to absolute-score compression than F1. If it *does* hurt, Plan B is `text-embedding-3-large` or an asymmetric retrieval model.
-2. **Contrastive phrasing may not cleanly embed.** Embedding models handle negation imperfectly. If `"Not employees of martech SaaS vendors"` doesn't separate in embedding space, fall through to the Plan B subtractive seller-mirror.
-3. **LLM ICP extraction quality.** A site with generic copy produces a generic ICP. Tier 2 review step in the wizard surfaces the extracted ICP for user correction, but users who don't customize get the generic version. Mitigated by the contrastive-phrasing convention and the review step.
-4. **Thin LinkedIn headlines.** "Professional at [Company]", "CEO" etc. produce noisy fit scores. Data-quality issue, not a model issue — the scorer correctly reflects genuine uncertainty. Eventual mitigation: per-connection "enrichment nudge" prompting user to manually tag ICP status for thin-headline people (deferred).
+1. **Asymmetric fit comparison.** ICP paragraph (~50–100 words) vs. headline+company (~20 words) is asymmetric in the same direction that hurt intent scoring. Mitigation: Precision@K is less sensitive to absolute-score compression than F1. Seller-mirror subtraction also helps because it's computed on the same asymmetric space — both terms compress similarly and the difference is preserved. If the comparison *does* fail DoD, fall back is `text-embedding-3-large` or an asymmetric retrieval model.
+2. **LLM ICP extraction quality.** A site with generic copy produces a generic ICP. Tier 2 review step in the wizard surfaces the extracted ICP for user correction, but users who don't customize get the generic version. Mitigated by the contrastive-phrasing convention, the seller-mirror subtraction (which compensates for a weak positive ICP), and the review step.
+3. **Thin LinkedIn headlines.** "Professional at [Company]", "CEO" etc. produce noisy fit scores. Data-quality issue, not a model issue — the scorer correctly reflects genuine uncertainty. Eventual mitigation: per-connection "enrichment nudge" prompting user to manually tag ICP status for thin-headline people (deferred).
+4. **Finding the right λ.** The subtractive weight `λ` on the seller-mirror term is a new tuning knob. Calibration sweeps it ({0.0, 0.1, 0.2, 0.3, 0.5, 0.7, 1.0}). If no λ produces a usable Precision@5 / Recall curve, the seller-mirror isn't carrying its weight — that's a signal to rethink the negative term (different prompt, different input) rather than scrap it.
 
 ---
 
@@ -221,13 +227,13 @@ Re-use `backend/scripts/calibrate_matching.py` against the session-8 dataset:
 Not the full plan — just the slicing shape:
 
 1. Migration 008+009+010 + model updates
-2. `app/prompts/extract_icp.py` + extended `profile/extract` endpoint
-3. `app/services/fit_scorer.py` (`compute_fit_score`, `compute_hybrid_score`)
-4. `backend/scripts/backfill_fit_scores.py` one-shot
-5. Pipeline branch in `app/workers/pipeline.py`
-6. Wizard frontend updates (tier-2/3 ICP inputs + review step)
-7. Calibration run #1 (Dwao) + CleverTap re-label + findings
+2. `app/prompts/extract_icp.py` + `app/prompts/extract_seller_mirror.py` (or one shared prompt module producing both outputs) + extended `profile/extract` endpoint returning both
+3. `app/services/fit_scorer.py` (`compute_fit_score` with positive − λ·negative, `compute_hybrid_score`)
+4. `backend/scripts/backfill_fit_scores.py` one-shot (runs for every workspace that flips to hybrid, re-embeds existing connections)
+5. Pipeline branch in `app/workers/pipeline.py` on `workspace.use_hybrid_scoring`
+6. Wizard frontend updates (tier-2/3 ICP inputs + review step showing both extracted ICP and seller-mirror)
+7. Calibration run #1 (Dwao) with λ sweep + CleverTap re-label + findings
 8. If DoD passes: flip flag for new workspaces, retire `compute_combined_score` after one release
-9. If DoD fails: Plan B seller-mirror, re-calibrate
+9. If DoD fails: diagnose per §5 step 8, ship the indicated fix (encoder upgrade, prompt improvement, or retrieval model swap)
 
 Each step ships as its own PR with its own review. The full plan (per-task dependency graph, test matrix, rollout sequencing) is the output of the `superpowers:writing-plans` invocation that follows this design's approval.
