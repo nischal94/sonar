@@ -2,6 +2,53 @@
 
 All notable changes to Sonar are documented here. Format loosely follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project uses [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
+## [0.8.0](https://github.com/nischal94/sonar/compare/v0.7.0...v0.8.0) (2026-04-20)
+
+
+### Added
+
+* **backfill:** wire day_one_backfill Celery task + end-to-end dogfood fixes ([#104](https://github.com/nischal94/sonar/issues/104)) ([6cfa360](https://github.com/nischal94/sonar/commit/6cfa360541dd5ae135726f3fe02dd29fdb47a207))
+* **delivery:** migrate email sender from SendGrid to Resend ([ed75626](https://github.com/nischal94/sonar/commit/ed756264724b30bf4f2d7d70c82c0edfc415a200))
+* **frontend:** add /login page + sign-in link on onboarding ([#109](https://github.com/nischal94/sonar/issues/109)) ([00f407d](https://github.com/nischal94/sonar/commit/00f407d5388ccad6c970c0f8af1dfb3081b145ae))
+
+
+### Fixed
+
+* **ci:** clean up e2e.yml shellcheck warnings, promote actionlint to blocking ([#85](https://github.com/nischal94/sonar/issues/85)) ([9640d87](https://github.com/nischal94/sonar/commit/9640d8788fb1d8234e4dda01966a04357fd6161d))
+* **docs:** TODO.html was missing the full Next Session Action Plan section ([772c07c](https://github.com/nischal94/sonar/commit/772c07cab8e7939eb85b1062acfef9129d6657e5))
+* **scoring:** relationship_score fallback for degree-based connections ([#105](https://github.com/nischal94/sonar/issues/105)) ([#112](https://github.com/nischal94/sonar/issues/112)) ([481f299](https://github.com/nischal94/sonar/commit/481f299dbcab02c3455ca55acff946426920374b))
+* **security:** annotate bandit FP + add .trivyignore for transient deps ([#101](https://github.com/nischal94/sonar/issues/101)) ([613d429](https://github.com/nischal94/sonar/commit/613d42974da6bd338ff3e06e6aa8864f9a4ed763))
+* **security:** run containers as non-root (resolves DS-0002) ([#102](https://github.com/nischal94/sonar/issues/102)) ([b1ca37a](https://github.com/nischal94/sonar/commit/b1ca37a67b70c68d2e805e33c35599b997d27ce0))
+* **security:** SHA-pin actions + persist-credentials: false (resolves [#87](https://github.com/nischal94/sonar/issues/87)) ([#100](https://github.com/nischal94/sonar/issues/100)) ([b00733d](https://github.com/nischal94/sonar/commit/b00733d69995925b85aa5c79a1555b45ec06b650))
+* **wizard:** gpt-5.4-mini param rename + list-top-level LLM output tolerance ([#103](https://github.com/nischal94/sonar/issues/103)) ([5ee44de](https://github.com/nischal94/sonar/commit/5ee44de9893c3612cf3da5b51f9200fb3f456806))
+
+
+### Documentation
+
+* add OpenSSF Scorecard badge ([#84](https://github.com/nischal94/sonar/issues/84)) ([88510dc](https://github.com/nischal94/sonar/commit/88510dcfbd2b5ef176b4acd9b5a937bf231d27ce))
+* add SendGrid→Resend migration banner to historical plan docs ([ab76e94](https://github.com/nischal94/sonar/commit/ab76e942d1c7c45ed913b838c59576ffe83aca0f))
+* consolidate to TODO.md as single source of truth; retire session-notes/ ([ebc1ddd](https://github.com/nischal94/sonar/commit/ebc1ddd9741c04669fafd0fdd4bfc1caf87f8e58))
+* **github:** add [@claude](https://github.com/claude) CLAUDE.md update prompt to PR template ([31a94f6](https://github.com/nischal94/sonar/commit/31a94f67aad360c83fbfa3f6270b254719eba274))
+* **phase-2.6:** design proposal — Fit × Intent hybrid scoring ([14cc237](https://github.com/nischal94/sonar/commit/14cc237d3a3b75f3ba27ae4d60d8a4b7bc34a726))
+* **phase-2.6:** revise design after first review ([0d390e7](https://github.com/nischal94/sonar/commit/0d390e7c9601fa761ad201b61d3a1e957073cc35))
+* refresh TODO — close [#76](https://github.com/nischal94/sonar/issues/76) state, add [#80](https://github.com/nischal94/sonar/issues/80) (Resend domain verify) ([5eeece5](https://github.com/nischal94/sonar/commit/5eeece5b7b145c94113d7843dd3977e4d7f7d121))
+* session 7 notes + doc updates from first live dogfood ([af54add](https://github.com/nischal94/sonar/commit/af54add5ef8c9149d660bb4de72b345c5d1bc47b))
+* TODO.md + TODO.html session-8 update ([899e0a4](https://github.com/nischal94/sonar/commit/899e0a4e1448da3d3ddd57ef3f5aee8fb7486e6f))
+
+
+### CI/CD
+
+* add Tier 4 workflows (OSV-Scanner, Lighthouse CI, Dependabot auto-merge) + grouping ([#86](https://github.com/nischal94/sonar/issues/86)) ([d250047](https://github.com/nischal94/sonar/commit/d2500479262ad0c25ea20d49d3d4c58e8aa6a0ac))
+* add Tier B security workflows (gitleaks, bandit, pip-audit, trivy, actionlint, dep-review) ([#82](https://github.com/nischal94/sonar/issues/82)) ([263706a](https://github.com/nischal94/sonar/commit/263706a84f99ed5bf6c18d46eaa4efa4b69f38d1))
+* add Tier C+ enhancements (Claude review, Scorecard, image Trivy) ([#83](https://github.com/nischal94/sonar/issues/83)) ([3842f71](https://github.com/nischal94/sonar/commit/3842f7197189404677d1eda71f827f4f3eeaa31d))
+* **deps:** drop Dependabot open-pull-requests-limit 5 → 2 (burst hard-cap) ([#99](https://github.com/nischal94/sonar/issues/99)) ([a8c52ba](https://github.com/nischal94/sonar/commit/a8c52bac0c3812d9508e110fe0a8a3f067bccf22))
+
+
+### Chores
+
+* **backfill:** lower caps to dogfood scale (20 profiles x 3 posts) ([8478357](https://github.com/nischal94/sonar/commit/84783577e17f4ad702b046fe6456a7ba36850cf6))
+* **ci:** fetch full git history for [@claude](https://github.com/claude) action ([714f3b9](https://github.com/nischal94/sonar/commit/714f3b9dd3701ee5ff008310dfca28ad24a16da5))
+
 ## [0.7.0](https://github.com/nischal94/sonar/compare/v0.6.0...v0.7.0) (2026-04-18)
 
 
