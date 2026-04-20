@@ -26,6 +26,7 @@ Closes #
 - [ ] New or updated tests cover the behavior I touched (no "I manually verified" for non-trivial logic)
 - [ ] No secrets, API keys, or personal data committed — `.env`, credentials, PII all clean
 - [ ] If this is security-sensitive (auth, crypto, user input, LLM output used for execution), `superpowers:code-reviewer` was run before requesting merge
+- [ ] Tagged `@claude review this PR and update CLAUDE.md if any new patterns, rules, or lessons learned should be captured` in a comment
 
 ## Deployment notes
 
