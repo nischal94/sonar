@@ -141,6 +141,14 @@ Every Phase 2+ contribution aims to meet these. When skipping something, call it
 - **Never add `NOT NULL` without a default** — it locks large tables and takes production down.
 - **pgvector embedding columns in BOTH the migration and the ORM** — use `pgvector.sqlalchemy.Vector(1536)` in the ORM so `Base.metadata.create_all` builds it for tests.
 - **Don't bundle Phase 1 gap fixes into Phase 2 migrations without an explicit comment** explaining what you're fixing and why.
+- **NEVER run `alembic downgrade base` (or any `alembic downgrade` below `head`) against the `sonar` dev DB.** It runs `DROP TABLE` on every table and wipes all rows. For migration round-trip tests, override `sqlalchemy.url` inside the test fixture to point at `sonar_test` — see `backend/tests/test_migration_008_009_010.py::alembic_cfg` for the canonical pattern. Never embed `alembic downgrade` as a shell-step "fresh start" in an implementation plan. Phase 2.6 Task 1 (2026-04-21) lost all session-8 dogfood data this way.
+- **Snapshot the dogfood DB before any multi-migration phase.** First command of any migration-touching session:
+  ```bash
+  mkdir -p snapshots/
+  docker compose exec -T postgres pg_dump -U sonar sonar > snapshots/$(date +%Y-%m-%d)-pre-<phase>.sql
+  ```
+  `snapshots/` is gitignored (dumps may carry PII). Local safety only. Without this, an accidental destructive command during plan execution has no recovery path.
+- **Codex review is mandatory for plans that touch migrations or shared DBs.** "Any plan that runs commands against shared DBs must be codex-reviewed" — time-saved by skipping is minutes; time-lost to an unrecovered wipe is hours-to-days. Phase 2.6's destructive step would have been caught by codex.
 
 ### Deployment and release
 - **Semver + git tags** on every release. No "main-only" implicit versions.
