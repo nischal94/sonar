@@ -82,7 +82,8 @@ export function SignalConfig() {
   const [whatYouSell, setWhatYouSell] = useState("");
   const [icp, setIcp] = useState("");
   const [sellerMirror, setSellerMirror] = useState("");
-  const [icpEdited, setIcpEdited] = useState(false);
+  const [icpDirty, setIcpDirty] = useState(false);
+  const [sellerMirrorDirty, setSellerMirrorDirty] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [proposalEventId, setProposalEventId] = useState<string | null>(null);
@@ -101,7 +102,8 @@ export function SignalConfig() {
       });
       setIcp(data.icp || "");
       setSellerMirror(data.seller_mirror || "");
-      setIcpEdited(false);
+      setIcpDirty(false);
+      setSellerMirrorDirty(false);
       setStep(3);
     } catch (e) {
       const detail =
@@ -138,14 +140,14 @@ export function SignalConfig() {
   };
 
   const handleIcpNext = async () => {
-    if (icpEdited) {
+    if (icpDirty || sellerMirrorDirty) {
       setLoading(true);
       setError(null);
+      const body: { icp?: string; seller_mirror?: string } = {};
+      if (icpDirty) body.icp = icp;
+      if (sellerMirrorDirty) body.seller_mirror = sellerMirror;
       try {
-        await api.post("/profile/update-icp", {
-          icp,
-          seller_mirror: sellerMirror,
-        });
+        await api.post("/profile/update-icp", body);
       } catch (e) {
         const detail =
           (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
@@ -290,7 +292,7 @@ export function SignalConfig() {
               value={icp}
               onChange={(e) => {
                 setIcp(e.target.value);
-                setIcpEdited(true);
+                setIcpDirty(true);
               }}
             />
           </div>
@@ -308,7 +310,7 @@ export function SignalConfig() {
               value={sellerMirror}
               onChange={(e) => {
                 setSellerMirror(e.target.value);
-                setIcpEdited(true);
+                setSellerMirrorDirty(true);
               }}
             />
           </div>
@@ -317,9 +319,10 @@ export function SignalConfig() {
             <button
               style={secondaryBtn}
               onClick={() => {
-                // Reset the dirty flag so a subsequent re-extract starts
+                // Reset both dirty flags so a subsequent re-extract starts
                 // clean rather than carrying over edits the user abandoned.
-                setIcpEdited(false);
+                setIcpDirty(false);
+                setSellerMirrorDirty(false);
                 setStep(2);
               }}
             >
