@@ -455,63 +455,64 @@
   <!-- HERO: first action next session -->
   <section class="hero">
     <span class="pill info">Start here tomorrow</span>
-    <h3 style="margin-top:10px">✅ Review + merge PR #114 (calibration findings), then brainstorm Phase 2.6</h3>
-    <p>Read <code>eval/calibration/findings-dogfood-martech.md</code> and <code>phase-2.6-evidence.md</code> on PR #114. If the interpretation holds, merge. Close issue #106 as superseded by #113. Then start <code>superpowers:brainstorming</code> to scope the Fit × Intent scoring redesign — that's the only thing on the critical path now.</p>
+    <h3 style="margin-top:10px">🔬 Manual browser walkthrough of the 6-step wizard, then run Task 9 calibration</h3>
+    <p>Phase 2.6 code Tasks 1–8 are shipped in <a href="https://github.com/nischal94/sonar/pull/119">PR #119</a> (186 tests green, merge blocker <a href="https://github.com/nischal94/sonar/issues/120">#120</a> fixed). Only Task 9 (operational) remains. Walk the wizard in Chrome, then run <code>analyze-hybrid</code> for Dwao + CleverTap to pick the winning λ. Flip <code>use_hybrid_scoring=True</code> only if DoD passes on both (P@5 ≥ 0.6, Recall@5 ≥ 0.5, zero top-5 competitors).</p>
     <div class="hero-meta">
-      <span>After this: 🧭 Phase 2.6 design brainstorm → 🔒 #107 + #108 hardening → Phase 2.6 implementation → Discovery (deferred until 2.6 ships)</span>
+      <span>After this: 🎯 Task 9 calibration → 🚀 merge PR #119 + flip flag → 🛠 address follow-ups <a href="https://github.com/nischal94/sonar/issues/121">#121</a>–<a href="https://github.com/nischal94/sonar/issues/124">#124</a> → Discovery (deferred until 2.6 DoD passes)</span>
       <span>Full ordered plan with rationale in the Next Session Action Plan section below</span>
     </div>
   </section>
 
   <!-- NEXT SESSION ACTION PLAN — mirrors TODO.md §"Next Session Action Plan" -->
-  <h2>Next Session Action Plan <span style="font-size: 12px; color: var(--ink-soft); font-weight: normal;">(last rewritten 2026-04-20, end of session 8)</span></h2>
-  <p class="tight" style="color: var(--ink-soft); margin-bottom: 16px;">Ordered. Item 1 is literally the first thing to do. Each item has What / Why now / Blocks / Effort.</p>
+  <h2>Next Session Action Plan <span style="font-size: 12px; color: var(--ink-soft); font-weight: normal;">(last rewritten 2026-04-21, end of session 10)</span></h2>
+  <p class="tight" style="color: var(--ink-soft); margin-bottom: 16px;">Ordered. Item 1 is literally the first thing to do. Each item has What / Why now / Blocks / Effort. State at resume: branch <code>feat/phase-2-6-migrations</code> HEAD = <code>583154b</code>; 186 tests green; <a href="https://github.com/nischal94/sonar/pull/119">PR #119</a> open.</p>
 
   <div class="action-plan">
     <details open>
-      <summary><strong>1. ✅ Review + merge PR <a href="https://github.com/nischal94/sonar/pull/114">#114</a> (calibration findings)</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">15–30 min &middot; do first</span></summary>
+      <summary><strong>1. 🔬 Manual browser walkthrough of the 6-step wizard</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">10–15 min &middot; do first</span></summary>
       <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
-        <li><strong>What:</strong> Read <code>eval/calibration/findings-dogfood-martech.md</code> and <code>phase-2.6-evidence.md</code>. If the interpretation holds, merge. Close <a href="https://github.com/nischal94/sonar/issues/106">#106</a> as superseded by <a href="https://github.com/nischal94/sonar/issues/113">#113</a> with a cross-link.</li>
-        <li><strong>Why now:</strong> Calibration evidence is only on a feature branch. Every subsequent decision depends on it being canonical in <code>main</code>.</li>
-        <li><strong>Blocks:</strong> Item 2 (Phase 2.6 brainstorm should reference merged evidence, not a PR branch).</li>
-        <li><strong>Effort:</strong> 15–30 min.</li>
+        <li><strong>What:</strong> <code>docker compose up -d frontend &amp;&amp; open http://localhost:5173/signals/setup</code>. Walk all 6 steps: enter "What do you sell?" → <strong>new ICP review step 3</strong> appears showing extracted ICP + seller_mirror → edit each field → proceed to signal generation → accept/reject → save. Check devtools network tab for <code>/profile/extract</code> (returns icp + seller_mirror) and <code>/profile/update-icp</code> (fires only if edited). Screenshot for PR merge record.</li>
+        <li><strong>Why now:</strong> Per CLAUDE.md lessons learned, frontend changes require a human in the browser; <code>npm run build</code> proves the bundle compiles, not that React rendering works at runtime. Last gate before Task 9's calibration run.</li>
+        <li><strong>Blocks:</strong> Item 2 (calibration run needs a confirmed working ICP extraction flow) and item 3 (PR merge).</li>
+        <li><strong>Effort:</strong> 10–15 min.</li>
       </ul>
     </details>
 
     <details>
-      <summary><strong>2. 🧭 Phase 2.6 — Fit × Intent scoring design brainstorm</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">full session &middot; the central session-9 activity</span></summary>
+      <summary><strong>2. 🎯 Task 9 — run Phase 2.6 calibration + decide flag flip</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">1–2 hours &middot; ship/don't-ship gate</span></summary>
       <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
-        <li><strong>What:</strong> Run <code>superpowers:brainstorming</code> with problem framed per <a href="https://github.com/nischal94/sonar/issues/113">#113</a>. Produce <code>docs/phase-2-6/design.md</code> covering: fit-encoder choice (BGE / E5 / OpenAI 3-large with asymmetric prompts), per-connection <code>fit_score</code> schema + inputs (headline + company + role vs. ICP), ICP disqualifiers (competitors, vendors in same category), combination strategy (multiplicative vs additive), persistence-of-prior-signals (Bayesian bump across posts from high-intent authors), calibration plan (re-use <code>backend/scripts/calibrate_matching.py</code>, same 30-post dogfood dataset as before/after baseline).</li>
-        <li><strong>Why now:</strong> Single most important open question for the product. The calibration proved the current primitive cannot ship. Every other Phase 2 + Phase 3 item depends on matching being meaningful.</li>
-        <li><strong>Blocks:</strong> Phase 2 Discovery, all Phase 3 work, any launch plan.</li>
-        <li><strong>Effort:</strong> Full session brainstorming + design doc. Implementation is 2–3 sessions after.</li>
+        <li><strong>What:</strong> For both Dwao and CleverTap workspaces — extract ICP via <code>/profile/extract</code>, run <code>python scripts/backfill_fit_scores.py --workspace-id &lt;uuid&gt;</code>, then <code>python scripts/calibrate_matching.py analyze-hybrid --workspace-id &lt;uuid&gt; --labels eval/calibration/&lt;dataset&gt;.md --lambdas 0.0,0.1,0.2,0.3,0.5,0.7,1.0</code>. Re-label the 30-post dogfood dataset under the CleverTap lens first (~15 min). Pick the winning λ that satisfies DoD on BOTH workspaces: P@5 ≥ 0.6, Recall@5 ≥ 0.5, zero top-5 competitors. Document findings at <code>eval/calibration/phase-2-6-findings.md</code>.</li>
+        <li><strong>Why now:</strong> Ship/don't-ship gate. The implementation is shippable code; whether it improves matching is an empirical question only calibration answers. If DoD fails, see <code>design.md §5 step 8</code> for diagnostic paths.</li>
+        <li><strong>Blocks:</strong> flag flip on dogfood workspace. PR #119 can merge independently, but the flip is the operational goal.</li>
+        <li><strong>Effort:</strong> 1–2 hours (ICP extraction × 2 workspaces, backfill × 2, analyze-hybrid × 2, CleverTap re-label, findings writeup).</li>
       </ul>
     </details>
 
     <details>
-      <summary><strong>3. 🔒 Hardening: issues <a href="https://github.com/nischal94/sonar/issues/107">#107</a> + <a href="https://github.com/nischal94/sonar/issues/108">#108</a></strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">~1.5 hours combined &middot; do before first external user</span></summary>
+      <summary><strong>3. 🚀 Merge PR #119 + flip the flag for dogfood workspace</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">5 min + 2 weeks monitoring</span></summary>
       <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
-        <li><strong>#107 — CORS service-worker routing:</strong> Route extension fetches through the background service worker (origin <code>chrome-extension://&lt;id&gt;</code>, already allowed). Remove <code>https://www.linkedin.com</code> from <code>app/main.py</code> <code>allow_origins</code>. Closes the <code>/auth/token</code> response-read exposure the session-7 CORS widening created. <strong>Effort:</strong> ~1 hour.</li>
-        <li><strong>#108 — Apify token to Authorization header:</strong> Move from URL query param (<code>?token=apify_api_...</code>) to <code>Authorization: Bearer</code> in <code>app/services/apify.py</code>. Verify harvestapi accepts header auth. Stops plaintext-token leak into worker logs. <strong>Effort:</strong> ~30 minutes.</li>
-        <li><strong>Why now:</strong> Both small, both security-adjacent. Best done before any external user signs up. Not blocked on Phase 2.6; can ship in parallel.</li>
+        <li><strong>What:</strong> After items 1 + 2 pass, merge <a href="https://github.com/nischal94/sonar/pull/119">PR #119</a>. Then <code>UPDATE workspaces SET use_hybrid_scoring = TRUE WHERE id = '&lt;Dwao_uuid&gt;';</code>. Monitor <code>/dashboard</code> output + delivered alerts for 1–2 weeks against the session-8 baseline.</li>
+        <li><strong>Why now:</strong> Phase 2.6 code is inert until the flag flips. Per-workspace rollout means rollback is a single SQL flip.</li>
+        <li><strong>Effort:</strong> 5 min merge + flip. 1–2 weeks monitoring.</li>
       </ul>
     </details>
 
     <details>
-      <summary><strong>4. 🛠 Small quality fixes</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">any time, low effort</span></summary>
+      <summary><strong>4. 🛠 Address Phase 2.6 follow-up issues</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">any time, low-to-medium effort</span></summary>
       <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
-        <li><strong><a href="https://github.com/nischal94/sonar/issues/110">#110</a> — Ring 1 dead:</strong> Signals are full phrases; Ring 1 does literal substring match; produces zero hits. May disappear if Phase 2.6 reshapes signal shape; revisit during 2.6 design.</li>
-        <li><strong><a href="https://github.com/nischal94/sonar/issues/111">#111</a> — Dashboard slider default 0.65 ignores workspace <code>matching_threshold</code>:</strong> ~30 min frontend fix. Not urgent.</li>
-        <li><strong>Dogfood DB cleanup:</strong> Session-8 ran the <code>UPDATE connections SET relationship_score = NULL WHERE relationship_score = 0.5 AND NOT has_interacted</code> from PR <a href="https://github.com/nischal94/sonar/pull/112">#112</a>. Noted here in case a fresh env is restored from snapshot.</li>
+        <li><strong><a href="https://github.com/nischal94/sonar/issues/121">#121</a> — PROMPT_VERSION logging:</strong> systemic tech debt; also affects the existing <code>extract_capability_profile</code>.</li>
+        <li><strong><a href="https://github.com/nischal94/sonar/issues/122">#122</a> — wizard per-field dirty flags:</strong> avoid redundant re-embed on unchanged field. UX polish.</li>
+        <li><strong><a href="https://github.com/nischal94/sonar/issues/123">#123</a> — pipeline fit_score race:</strong> idempotent outcome; low priority until traffic scales.</li>
+        <li><strong><a href="https://github.com/nischal94/sonar/issues/124">#124</a> — workspace.hybrid_lambda column:</strong> add only if Task 9 picks λ ≠ 0.3. Close as "no action needed" otherwise.</li>
+        <li><strong>Also deferred from session 8:</strong> <a href="https://github.com/nischal94/sonar/issues/107">#107</a> CORS service-worker routing, <a href="https://github.com/nischal94/sonar/issues/108">#108</a> Apify token → Authorization header, <a href="https://github.com/nischal94/sonar/issues/110">#110</a> Ring 1 dead, <a href="https://github.com/nischal94/sonar/issues/111">#111</a> dashboard slider default. None block Phase 2.6.</li>
       </ul>
     </details>
 
     <details>
-      <summary><strong>5. 🧭 Phase 2 Discovery</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">DEFERRED until Phase 2.6 ships</span></summary>
+      <summary><strong>5. 🧭 Phase 2 Discovery</strong> &middot; <span style="color: var(--ink-soft); font-weight: normal;">DEFERRED until Phase 2.6 DoD passes</span></summary>
       <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
         <li><strong>What:</strong> Ring 3 nightly HDBSCAN clustering for emerging topics + Weekly Digest Email. Per <code>docs/phase-2/design.md §4.4</code>.</li>
-        <li><strong>Why not now:</strong> Clustering the current matching signal clusters noise (F1 = 0.27). Discovery is building on sand until 2.6 lands.</li>
-        <li><strong>When to revisit:</strong> After Phase 2.6 ships <em>and</em> re-calibration produces F1 ≥ 0.6.</li>
+        <li><strong>When to revisit:</strong> After Task 9 DoD passes AND the flag has been stable for 2+ weeks on the dogfood workspace. Clustering the current matching signal clusters noise; Discovery is building on sand until 2.6 lands.</li>
         <li><strong>Effort:</strong> Multi-session when it's time.</li>
       </ul>
     </details>
@@ -878,6 +879,27 @@ docker compose exec -T api alembic upgrade head
   <p class="tight" style="color: var(--ink-soft); margin-bottom: 16px;">Newest first; terse. Full forensics live in git commit messages + PR descriptions. Files under <code>docs/session-notes/</code> (sessions 1–7) are historical — no new entries are added there.</p>
 
   <details open>
+    <summary><strong>Session 10 · 2026-04-21</strong> — Phase 2.6 implementation shipped (Tasks 1–8) + <a href="https://github.com/nischal94/sonar/issues/120">#120</a> blocker fix</summary>
+    <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
+      <li><strong>Open:</strong> <a href="https://github.com/nischal94/sonar/pull/119">PR #119</a> — 17 commits on <code>feat/phase-2-6-migrations</code>, 186 tests green. Implements all 8 code tasks from <code>docs/phase-2-6/implementation.md</code>: 3 migrations + ORM updates, ICP + seller_mirror prompt module, fit_scorer service, extended <code>/profile/extract</code>, pipeline branch on <code>use_hybrid_scoring</code>, one-shot backfill script, wizard ICP review step + <code>/profile/update-icp</code>, <code>analyze-hybrid</code> calibration subcommand.</li>
+      <li><strong>Discipline:</strong> every task through <code>superpowers:subagent-driven-development</code> with two-stage review (spec + quality). Reviews caught 1 blocking (Task 1 SQL injection in test), 6 important findings, multiple nice-to-haves — all addressed inline or deferred with rationale.</li>
+      <li><strong>Closed:</strong> <a href="https://github.com/nischal94/sonar/issues/120">#120</a> — Phase 2.6 merge blocker (delivery formatters rendering <code>relationship_score=0.0</code> as "Relationship: 0%"). Migration 011 makes the column nullable; hybrid pipeline path passes None; Slack/Telegram/email render "Relationship: N/A (hybrid scoring)".</li>
+      <li><strong>Filed for follow-up:</strong> <a href="https://github.com/nischal94/sonar/issues/121">#121</a> PROMPT_VERSION logging systemic gap, <a href="https://github.com/nischal94/sonar/issues/122">#122</a> wizard per-field dirty flags, <a href="https://github.com/nischal94/sonar/issues/123">#123</a> pipeline fit_score race (idempotent), <a href="https://github.com/nischal94/sonar/issues/124">#124</a> lambda storage pending Task 9 calibration.</li>
+      <li><strong>Task 9 still pending</strong> — operational: run <code>analyze-hybrid</code> for Dwao + CleverTap against the session-8 labeled dataset, pick winning λ, flip <code>use_hybrid_scoring=True</code> only if DoD passes on both. Manual browser walkthrough of the 6-step wizard also required before merge.</li>
+    </ul>
+  </details>
+
+  <details>
+    <summary><strong>Session 9 · 2026-04-20/21</strong> — Phase 2.6 design doc written + first review</summary>
+    <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
+      <li><strong>Merged:</strong> <a href="https://github.com/nischal94/sonar/pull/114">PR #114</a> — calibration harness + findings + Phase 2.6 evidence pool. Closed <a href="https://github.com/nischal94/sonar/issues/106">#106</a> as superseded by <a href="https://github.com/nischal94/sonar/issues/113">#113</a>.</li>
+      <li><strong>Committed:</strong> <code>14cc237</code> Phase 2.6 design proposal (Fit × Intent hybrid scoring), <code>0d390e7</code> revision after first review. <code>docs/phase-2-6/design.md</code> covers contrastive ICP phrasing with explicit anti-examples, a subtractive seller-mirror term with λ sweep (promoted from Plan B to v1 after review), multiplicative <code>fit × intent</code> combine, three DoD constraints (P@5 ≥ 0.6, Recall ≥ 0.5, zero top-5 competitor leakage), feature-flag rollout.</li>
+      <li><strong>Design retractions from first review:</strong> Dropped the earlier concern that CleverTap calibration would be weaker because the labeler doesn't work there. Confused product thinking — the labeler's domain knowledge is what matters, employment is irrelevant. CleverTap remains a full dual-profile DoD.</li>
+      <li><strong>Implementation plan written:</strong> <code>docs/phase-2-6/implementation.md</code> — 9 tasks with bite-sized TDD steps, exact code snippets, commit messages. Task 9 is operational (flag flip + retire legacy).</li>
+    </ul>
+  </details>
+
+  <details>
     <summary><strong>Session 8 · 2026-04-20</strong> — Login page, scorer fix, and the calibration finding that reshaped Phase 2</summary>
     <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
       <li><strong>Merged:</strong> <a href="https://github.com/nischal94/sonar/pull/109">PR #109</a> (frontend <code>/login</code> page), <a href="https://github.com/nischal94/sonar/pull/112">PR #112</a> (fixes <a href="https://github.com/nischal94/sonar/issues/105">#105</a> — <code>Connection.relationship_score</code> was forced to 0.5 by ORM default, bypassing <code>DEGREE_BASE_SCORE</code> fallback; migration 007 makes column nullable).</li>
