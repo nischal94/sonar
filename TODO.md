@@ -4,54 +4,52 @@
 
 ---
 
-## Next Session Action Plan (last rewritten 2026-04-20, end of session 8)
+## Next Session Action Plan (last rewritten 2026-04-21, end of session 11)
 
-**State at resume:** `main` HEAD = `481f299` (check with `git log -1`). Tests: 136 backend pass. CI green on `main`. Working tree clean. **PR #114 open** on branch `eval/calibration-v1` with the calibration harness + findings — needs review + merge before session-9 work starts.
+**State at resume:** Two active branches. `feat/phase-2-6-migrations` at `8e191c9` has PR #119 open — 21 commits, 188 tests green, Phase 2.6 Tasks 1–8 + #120 blocker fix + #121/#122 quality fixes + CLAUDE.md hardening. `docs/phase-3-design` at `8e191c9` has Phase 3 design doc (passed 4 review skills: ENG + CODEX + CEO + DESIGN) + 2395-line implementation plan, no PR yet. CEO plan persisted at `~/.gstack/projects/nischal94-sonar/ceo-plans/2026-04-21-phase-3-target-scoped-intent.md`.
 
-### 1. ✅ Review + merge PR #114 (calibration findings)
+### 1. 🔬 Manual browser walkthrough of the 7-step wizard + Phase 2.6 Task 9 calibration
 
-**What:** Read `eval/calibration/findings-dogfood-martech.md` and `eval/calibration/phase-2.6-evidence.md` on PR #114. If the interpretation holds up, merge. Close issue #106 ("threshold calibration") as superseded by #113 ("matching model not viable — Phase 2.6 required") — reference #113 in the close comment.
-**Why now:** The calibration evidence is currently only on a feature branch. Every subsequent decision depends on it being canonical in `main`. Keeping it unmerged risks losing it or losing the thread.
-**Blocks:** Item 2 (Phase 2.6 brainstorm should reference the merged evidence, not a PR branch).
-**Effort:** 15–30 min (read, merge, close #106).
+**What:** Phase 2.6's PR #119 needs two gates before merge: (a) `docker compose up -d frontend && open http://localhost:5173/signals/setup`, walk all 6 steps, screenshot for PR, (b) run `analyze-hybrid` for Dwao + CleverTap per `docs/phase-2-6/design.md §5` — pick winning λ satisfying DoD on both. **Dogfood data was wiped in Phase 2.6 Task 1 alembic downgrade incident** — the session-8 30-post labeled dataset now references post UUIDs that no longer exist. Calibration requires regenerating dogfood data (LinkedIn extension or Apify backfill) OR deferring Task 9 entirely and merging PR #119 with flag off (safe: default `use_hybrid_scoring=FALSE`).
+**Why now:** Phase 2.6 code is shippable-with-flag-off. Merging frees the branch for Phase 3 to stack cleanly on fresh main.
+**Blocks:** Phase 3 implementation start (wants clean main).
+**Effort:** Browser walkthrough 10–15 min. Calibration 1–2 hours (if dogfood data available) OR defer.
 
-### 2. 🧭 Phase 2.6 — Fit × Intent scoring design brainstorm (the central session-9 activity)
+### 2. 🚀 Merge PR #119 (Phase 2.6) + open PR for `docs/phase-3-design`
 
-**What:** Run `superpowers:brainstorming` with the problem framed per issue #113: "design a Fit × Intent hybrid scoring model for Sonar that fixes the failure modes in `eval/calibration/phase-2.6-evidence.md`." Produce `docs/phase-2-6/design.md` covering: the fit-encoder choice (BGE / E5 / OpenAI 3-large with asymmetric prompts), per-connection `fit_score` schema + inputs (headline + company + role vs. ICP profile), how to capture ICP disqualifiers (competitors, vendors in same category), how to combine with intent (multiplicative vs additive), persistence-of-prior-signals (Bayesian bump across posts from same high-intent author), calibration plan (re-use `backend/scripts/calibrate_matching.py`, same 30-post dogfood dataset as "before/after" baseline).
-**Why now:** This is the single most important open question for the product. The calibration proved the current primitive cannot ship. Every other Phase 2 item (Discovery) and Phase 3 item (real-time, CRM, team) depends on matching being meaningful. Nothing matters more than getting this right.
-**Blocks:** Phase 2 Discovery, all Phase 3 work, any launch plan.
-**Effort:** Full session for brainstorming + design doc. Implementation is another 2–3 sessions after.
+**What:** After item 1 gates pass, merge PR #119. Then `gh pr create` on `docs/phase-3-design` → main; 2 files (`docs/phase-3/design.md`, `docs/phase-3/implementation.md`). Pure docs PR; `superpowers:code-reviewer` is nice-to-have, not required.
+**Why now:** Two docs on a branch with no PR is dead weight. PR creates a review surface for the plan.
+**Effort:** 5 min merge + 5 min PR open.
 
-### 3. 🔒 Hardening: issues #107 + #108 (do before first external user)
+### 3. 🏗 Begin Phase 3 implementation
 
-**#107 — CORS service-worker routing.** Route extension fetches through the background service worker (whose origin is `chrome-extension://<id>`, already allowed). Remove `https://www.linkedin.com` from `app/main.py` `allow_origins`. Closes the `/auth/token` response-read exposure the session-7 CORS widening created. **Effort:** ~1 hour.
+**What:** After both PRs merge, execute Phase 3's 18-task implementation plan via `superpowers:subagent-driven-development` (same discipline Phase 2.6 used). Plan at `docs/phase-3/implementation.md`. First task is migrations 012–014b + ORM updates.
+**Prerequisites (codified at top of implementation.md):**
+- `/careful` umbrella enabled at session start
+- `pg_dump snapshots/$(date +%Y-%m-%d)-pre-phase-3.sql` taken FIRST
+- `/design-consultation` produces `docs/DESIGN.md` before any frontend task (Tasks 9, 10, 11, 13)
+**Why now:** Pivot away from Chrome-extension attack surface (CEO review called the decision; codex review stress-tested; eng review validated architecture; design review specified UI hierarchy and interaction states).
+**Effort:** 8–12 weeks eng per honest estimate after codex flagged the "scoring engine unchanged" overclaim (alert schema + context_generator + dashboard aggregation are real rewrites, not just ingest swap).
 
-**#108 — Apify token to `Authorization` header.** Move from URL query param (`?token=apify_api_...`) to `Authorization: Bearer` header in `app/services/apify.py`. Verify harvestapi accepts header auth. Stops the plaintext-token leak into every worker log line. **Effort:** ~30 minutes.
+### 4. 🛠 Low-priority follow-ups (open issues, any time)
 
-**Why now:** Both are security-adjacent and small. Best done in one commit *before* any external user signs up. Not blocked on Phase 2.6 — can ship in parallel or in a gap between brainstorm and implementation.
+- [#123](https://github.com/nischal94/sonar/issues/123) — pipeline fit_score race. Idempotent; low priority until traffic scales.
+- [#124](https://github.com/nischal94/sonar/issues/124) — `workspace.hybrid_lambda` column. Pending Task 9 calibration outcome; close as "no action" if λ=0.3 wins.
+- [#125](https://github.com/nischal94/sonar/issues/125) — convert inline prompts in `extract_capability_profile` + `context_generator` to prompt modules. Tech debt follow-up from #121 fix.
+- From session-8 era (still open): [#107](https://github.com/nischal94/sonar/issues/107) CORS, [#108](https://github.com/nischal94/sonar/issues/108) Apify token — both close STRUCTURALLY when Phase 3 v3.2 disables extension capture.
 
-### 4. 🛠 Small quality fixes (any time, low effort)
-
-- **#110 — Ring 1 dead.** Signals are full phrases; Ring 1 does literal substring match; produces zero hits. Partially overlaps with Phase 2.6 (may disappear if Phase 2.6 reshapes what a "signal" is). Decide in Phase 2.6 design whether to fix standalone or fold in.
-- **#111 — Dashboard slider default (0.65) ignores workspace `matching_threshold`.** Small frontend fix: pass the workspace's stored threshold on initial render. ~30 minutes. Not urgent.
-- **Dogfood DB cleanup (per PR #112 body).** Run `UPDATE connections SET relationship_score = NULL WHERE relationship_score = 0.5 AND NOT has_interacted;` on the dogfood workspace to let the fixed scorer see correct values. Already done in session 8; noted here in case a fresh environment is restored from a snapshot.
-
-### 5. 🧭 Phase 2 Discovery (DEFERRED until Phase 2.6 ships)
+### 5. 🧭 Phase 2 Discovery (DEFERRED)
 
 **What:** Ring 3 nightly HDBSCAN clustering for emerging topics + Weekly Digest Email. Per `docs/phase-2/design.md §4.4`.
-**Why not now:** Clustering posts by the current matching signal clusters noise (F1 = 0.27). Discovery is building on sand until Phase 2.6 lands.
-**When to revisit:** After Phase 2.6 ships *and* re-calibration against the dogfood dataset produces F1 ≥ 0.6.
-**Effort:** Multi-session when it's time.
+**Why not now:** Clustering the current post distribution clusters noise. Per Phase 3 §11.4 CEO decisions, company-page targets (v3.1) are a prerequisite for cross-target trend clustering. Discovery belongs in v3.1+.
 
-### 6. 🚧 Pre-launch tier (gates before first external paying customer — NOT next-session work)
+### 6. 🚧 Pre-launch tier (NOT next-session work, tracked so it doesn't surprise)
 
-Tracked so they don't surprise:
 - **PII/GDPR:** data retention policy + export + deletion endpoints. Not started.
-- **Observability:** structlog + Sentry + Prometheus + split `/health/live` vs `/ready` + DB backup/restore drill. Not started.
+- **Observability:** structlog + Sentry + Prometheus + split `/health/live` vs `/ready` + DB backup/restore drill. Not started. Phase 3 §7 scrape-health metric is a start.
 - **LLM eval harness:** activates once `signal_proposal_events` has ~100+ real completions.
-- **Frontend dep bumps:** React 18→19, Vite 6→8, react-router-dom 6→7. Tracked in #40. Requires human in browser — plan a dedicated half-day.
-
-None of these belong in session 9; all gate first external customer.
+- **Frontend dep bumps:** React 18→19, Vite 6→8, react-router-dom 6→7. Tracked in #40.
+- **SOC 2 + SSO:** Needed for enterprise motion. Post-first-10-customers per Phase 3 CEO plan.
 
 ---
 
@@ -73,9 +71,13 @@ Ingest pipeline, capability profile extraction, signal matching, scoring, alerts
 | **2.6 — Fit × Intent scoring** | ⬜ Design pending | New slice replacing the narrow "threshold calibration" framing of #106. Per-connection fit score from headline + company + role, combined multiplicatively with per-post intent score. Matches industry standard (6sense / Apollo / Demandbase). Required before Discovery can build on a useful signal. Next-session work: `superpowers:brainstorming` → `docs/phase-2-6/design.md`. |
 | **Discovery** (original final slice) | ⬜ Deferred until 2.6 ships | Ring 3 nightly HDBSCAN clustering for emerging topics + Weekly Digest Email. Clustering the current signal clusters noise; deferred until Phase 2.6 re-calibrates to F1 ≥ 0.6. |
 
-### Phase 3 — ⬜ TBD (no design yet)
+### Phase 2.6 — 🟡 PR #119 open (21 commits, 188 tests), awaits Task 9 calibration + merge
 
-Three rough directions in `CLAUDE.md`: real-time alerts, CRM integrations, team features. Deprioritized vs Phase 2.6. Run `superpowers:brainstorming` to scope when 2.6 ships.
+Fit × Intent hybrid scoring. 8 code tasks shipped (migrations 008–011, ICP + seller_mirror prompt, fit_scorer service, extended `/profile/extract`, pipeline branch on `use_hybrid_scoring`, one-shot `backfill_fit_scores.py`, wizard ICP review step + `/profile/update-icp`, `analyze-hybrid` calibration subcommand) + `#120` blocker fix (delivery formatters handle null `relationship_score`) + `#121` PROMPT_VERSION logging + `#122` per-field wizard dirty flags + CLAUDE.md hardening (`alembic downgrade base` is destructive; `pg_dump` before migrations; codex-review mandatory on migration plans). Task 9 (operational) pending: calibration run + flag flip per design §5. Flag defaults FALSE so PR mergeable as-is.
+
+### Phase 3 — 🟡 Design + implementation plan complete on `docs/phase-3-design` branch, no PR yet
+
+Target-Scoped Intent. Chrome-extension-to-server-side ingest pivot. Design doc `docs/phase-3/design.md` passed 4 review skills (plan-eng-review, codex, plan-ceo-review, plan-design-review — all CLEAR). Implementation plan `docs/phase-3/implementation.md` has 18 bite-sized TDD tasks (mirror of Phase 2.6 plan shape). CEO plan persisted at `~/.gstack/projects/nischal94-sonar/ceo-plans/2026-04-21-phase-3-target-scoped-intent.md` with vision + GTM + first-10-customer profile. Estimated 8–12 weeks eng. v3.0 scope: people-only targets (companies v3.1), 10-min/25-100-typical tiered sizing, four-lever cost model, CRM sync (Salesforce + HubSpot) promoted from v3.1, warm-intro degree-1 lookup promoted to v3.0, Slack bot deferred to v3.1.
 
 ---
 
@@ -136,6 +138,15 @@ Run `superpowers:brainstorming` with "scope Phase 3 of Sonar — real-time alert
 ---
 
 ## Session log (newest first, terse; full forensics live in git commits + PR descriptions)
+
+### Session 11 — 2026-04-21 — Phase 3 design doc + 18-task implementation plan + CLAUDE.md hardening
+
+- **Pivot decided:** Chrome-extension passive-feed ingest → server-side Apify target-list scraping. Rationale: security attack surface, enterprise-readiness, multi-surface foundation. Phase 2.6 scoring engine carries forward; alert + context_generator + dashboard aggregation need rewrite (honest scope correction from codex review).
+- **Docs shipped on `docs/phase-3-design`:** `docs/phase-3/design.md` (4 reviews CLEAR) + `docs/phase-3/implementation.md` (18 TDD-style tasks, 2395 lines).
+- **CEO plan persisted:** `~/.gstack/projects/nischal94-sonar/ceo-plans/2026-04-21-phase-3-target-scoped-intent.md`.
+- **CLAUDE.md hardened** (from the Phase 2.6 Task 1 alembic wipe scar): 3 new rules in "Database and migrations" section — NEVER `alembic downgrade base` against dev DB; `pg_dump` snapshot before multi-migration phases; codex-review mandatory on plans touching migrations. `snapshots/` added to `.gitignore`.
+- **Memory scars filed (4):** `feedback_alembic_downgrade_is_destructive`, `feedback_pre_phase_snapshot`, `feedback_codex_review_is_not_optional_on_plans`, `feedback_careful_umbrella_for_migrations`. Indexed in MEMORY.md under new "Database & Migration Safety" section.
+- **Next session starts with:** (1) Task 9 calibration or defer + merge PR #119, (2) open PR for `docs/phase-3-design`, (3) begin Phase 3 implementation via `superpowers:subagent-driven-development`.
 
 ### Session 8 — 2026-04-20 — Login page, scorer fix, and the calibration finding that reshaped Phase 2
 

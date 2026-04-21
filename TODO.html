@@ -455,16 +455,16 @@
   <!-- HERO: first action next session -->
   <section class="hero">
     <span class="pill info">Start here tomorrow</span>
-    <h3 style="margin-top:10px">✅ Review + merge PR #114 (calibration findings), then brainstorm Phase 2.6</h3>
-    <p>Read <code>eval/calibration/findings-dogfood-martech.md</code> and <code>phase-2.6-evidence.md</code> on PR #114. If the interpretation holds, merge. Close issue #106 as superseded by #113. Then start <code>superpowers:brainstorming</code> to scope the Fit × Intent scoring redesign — that's the only thing on the critical path now.</p>
+    <h3 style="margin-top:10px">🔬 Task 9 calibration (or defer) + merge PR #119 → open PR for <code>docs/phase-3-design</code> → begin Phase 3</h3>
+    <p>Phase 2.6 code shipped on <code>feat/phase-2-6-migrations</code> (<a href="https://github.com/nischal94/sonar/pull/119">PR #119</a>, 21 commits, 188 tests). Phase 3 design + 18-task implementation plan shipped on <code>docs/phase-3-design</code> (4 reviews CLEAR: eng + codex + CEO + design). Task 9 calibration is blocked on dogfood data (wiped during session 10 alembic incident); defer Task 9 and merge PR #119 with flag off if rebuilding the labeled dataset is impractical. Phase 3 implementation begins after both PRs merge.</p>
     <div class="hero-meta">
-      <span>After this: 🧭 Phase 2.6 design brainstorm → 🔒 #107 + #108 hardening → Phase 2.6 implementation → Discovery (deferred until 2.6 ships)</span>
+      <span>After this: 🚀 merge PR #119 → open PR for docs/phase-3-design → 🏗 Phase 3 implementation via subagent-driven-development (8–12 weeks eng)</span>
       <span>Full ordered plan with rationale in the Next Session Action Plan section below</span>
     </div>
   </section>
 
   <!-- NEXT SESSION ACTION PLAN — mirrors TODO.md §"Next Session Action Plan" -->
-  <h2>Next Session Action Plan <span style="font-size: 12px; color: var(--ink-soft); font-weight: normal;">(last rewritten 2026-04-20, end of session 8)</span></h2>
+  <h2>Next Session Action Plan <span style="font-size: 12px; color: var(--ink-soft); font-weight: normal;">(last rewritten 2026-04-21, end of session 11)</span></h2>
   <p class="tight" style="color: var(--ink-soft); margin-bottom: 16px;">Ordered. Item 1 is literally the first thing to do. Each item has What / Why now / Blocks / Effort.</p>
 
   <div class="action-plan">
@@ -878,6 +878,18 @@ docker compose exec -T api alembic upgrade head
   <p class="tight" style="color: var(--ink-soft); margin-bottom: 16px;">Newest first; terse. Full forensics live in git commit messages + PR descriptions. Files under <code>docs/session-notes/</code> (sessions 1–7) are historical — no new entries are added there.</p>
 
   <details open>
+    <summary><strong>Session 11 · 2026-04-21</strong> — Phase 3 design + 18-task implementation plan + CLAUDE.md hardening</summary>
+    <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
+      <li><strong>Pivot decided:</strong> Chrome-extension passive-feed ingest → server-side Apify target-list scraping. Rationale: security attack surface, enterprise readiness, multi-surface foundation. Phase 2.6 scoring engine carries forward; alert + context_generator + dashboard aggregation need rewrite per codex review's honest scope correction.</li>
+      <li><strong>Docs shipped</strong> on <code>docs/phase-3-design</code> branch: <code>docs/phase-3/design.md</code> (4 review skills CLEAR: plan-eng-review + codex + plan-ceo-review + plan-design-review) + <code>docs/phase-3/implementation.md</code> (18 TDD-style tasks, 2395 lines, mirror of Phase 2.6 plan shape).</li>
+      <li><strong>CEO plan persisted:</strong> <code>~/.gstack/projects/nischal94-sonar/ceo-plans/2026-04-21-phase-3-target-scoped-intent.md</code> with vision + GTM + first-10-customer profile.</li>
+      <li><strong>CLAUDE.md hardened</strong> (from the Phase 2.6 Task 1 alembic wipe incident): 3 new rules in "Database and migrations" — NEVER <code>alembic downgrade base</code> against dev DB; <code>pg_dump</code> snapshot before multi-migration phases; codex-review mandatory on plans touching migrations. <code>snapshots/</code> added to <code>.gitignore</code>.</li>
+      <li><strong>Memory scars (4):</strong> <code>feedback_alembic_downgrade_is_destructive</code>, <code>feedback_pre_phase_snapshot</code>, <code>feedback_codex_review_is_not_optional_on_plans</code>, <code>feedback_careful_umbrella_for_migrations</code>. Indexed in MEMORY.md under new "Database &amp; Migration Safety" section.</li>
+      <li><strong>Next session:</strong> (1) Task 9 calibration or defer + merge <a href="https://github.com/nischal94/sonar/pull/119">PR #119</a>, (2) open PR for <code>docs/phase-3-design</code>, (3) begin Phase 3 implementation via <code>superpowers:subagent-driven-development</code> (8–12 weeks eng).</li>
+    </ul>
+  </details>
+
+  <details>
     <summary><strong>Session 8 · 2026-04-20</strong> — Login page, scorer fix, and the calibration finding that reshaped Phase 2</summary>
     <ul style="margin:12px 0 4px; padding-left:20px; color: var(--ink-soft);">
       <li><strong>Merged:</strong> <a href="https://github.com/nischal94/sonar/pull/109">PR #109</a> (frontend <code>/login</code> page), <a href="https://github.com/nischal94/sonar/pull/112">PR #112</a> (fixes <a href="https://github.com/nischal94/sonar/issues/105">#105</a> — <code>Connection.relationship_score</code> was forced to 0.5 by ORM default, bypassing <code>DEGREE_BASE_SCORE</code> fallback; migration 007 makes column nullable).</li>
