@@ -17,7 +17,7 @@ interface SignalSelection {
   edited?: ProposedSignal;
 }
 
-type Step = 1 | 2 | 3 | 4 | 5;
+type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
 const containerStyle: React.CSSProperties = {
   maxWidth: 720,
@@ -81,6 +81,9 @@ export function SignalConfig() {
   const [step, setStep] = useState<Step>(1);
   const [whatYouSell, setWhatYouSell] = useState("");
   const [icp, setIcp] = useState("");
+  const [sellerMirror, setSellerMirror] = useState("");
+  const [icpDirty, setIcpDirty] = useState(false);
+  const [sellerMirrorDirty, setSellerMirrorDirty] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [proposalEventId, setProposalEventId] = useState<string | null>(null);
@@ -89,6 +92,27 @@ export function SignalConfig() {
   // The v1 wizard only surfaces the LLM-proposed signals; leaving the setter
   // in place means the later UI can be added without refactoring state.
   const [userAdded] = useState<ProposedSignal[]>([]);
+
+  const handleExtractIcp = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const { data } = await api.post("/profile/extract", {
+        text: whatYouSell,
+      });
+      setIcp(data.icp || "");
+      setSellerMirror(data.seller_mirror || "");
+      setIcpDirty(false);
+      setSellerMirrorDirty(false);
+      setStep(3);
+    } catch (e) {
+      const detail =
+        (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(detail || "Failed to extract ICP. Try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handlePropose = async () => {
     setLoading(true);
@@ -105,7 +129,7 @@ export function SignalConfig() {
           status: "accepted" as const,
         })),
       );
-      setStep(4);
+      setStep(5);
     } catch (e) {
       const detail =
         (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
@@ -113,6 +137,27 @@ export function SignalConfig() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleIcpNext = async () => {
+    if (icpDirty || sellerMirrorDirty) {
+      setLoading(true);
+      setError(null);
+      const body: { icp?: string; seller_mirror?: string } = {};
+      if (icpDirty) body.icp = icp;
+      if (sellerMirrorDirty) body.seller_mirror = sellerMirror;
+      try {
+        await api.post("/profile/update-icp", body);
+      } catch (e) {
+        const detail =
+          (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+        setError(detail || "Failed to save ICP edits. Try again.");
+        setLoading(false);
+        return;
+      }
+      setLoading(false);
+    }
+    setStep(4);
   };
 
   const updateStatus = (idx: number, status: SignalStatus) => {
@@ -182,7 +227,7 @@ export function SignalConfig() {
 
   return (
     <div style={containerStyle}>
-      <div style={stepCounterStyle}>Step {step} of 5</div>
+      <div style={stepCounterStyle}>Step {step} of 6</div>
 
       {step === 1 && (
         <section>
@@ -220,18 +265,77 @@ export function SignalConfig() {
             value={icp}
             onChange={(e) => setIcp(e.target.value)}
           />
+          {error && <div style={errorStyle}>{error}</div>}
           <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
             <button style={secondaryBtn} onClick={() => setStep(1)}>
               Back
             </button>
-            <button style={primaryBtn} onClick={() => setStep(3)}>
-              Next
+            <button style={primaryBtn} disabled={loading} onClick={handleExtractIcp}>
+              {loading ? "Analyzing..." : "Next"}
             </button>
           </div>
         </section>
       )}
 
       {step === 3 && (
+        <section>
+          <h1 style={h1Style}>Review who we think your buyers are</h1>
+          <p style={helpStyle}>
+            Before we generate signals, confirm the buyer persona and seller persona we'll
+            be comparing connections against. Edit anything that looks off.
+          </p>
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontWeight: 500, marginBottom: 4 }}>Your ideal buyer (ICP)</div>
+            <textarea
+              style={textareaStyle}
+              rows={6}
+              value={icp}
+              onChange={(e) => {
+                setIcp(e.target.value);
+                setIcpDirty(true);
+              }}
+            />
+          </div>
+          <div style={{ marginTop: 16 }}>
+            <div style={{ fontWeight: 500, marginBottom: 4 }}>
+              Seller-mirror (subtracted during scoring)
+            </div>
+            <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>
+              What OTHER sellers of your capability look like on LinkedIn. We subtract this
+              signal so competing vendors don't rank as buyers.
+            </div>
+            <textarea
+              style={textareaStyle}
+              rows={6}
+              value={sellerMirror}
+              onChange={(e) => {
+                setSellerMirror(e.target.value);
+                setSellerMirrorDirty(true);
+              }}
+            />
+          </div>
+          {error && <div style={errorStyle}>{error}</div>}
+          <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
+            <button
+              style={secondaryBtn}
+              onClick={() => {
+                // Reset both dirty flags so a subsequent re-extract starts
+                // clean rather than carrying over edits the user abandoned.
+                setIcpDirty(false);
+                setSellerMirrorDirty(false);
+                setStep(2);
+              }}
+            >
+              Back
+            </button>
+            <button style={primaryBtn} disabled={loading} onClick={handleIcpNext}>
+              {loading ? "Saving..." : "Looks right — generate signals"}
+            </button>
+          </div>
+        </section>
+      )}
+
+      {step === 4 && (
         <section>
           <h1 style={h1Style}>Generating signals...</h1>
           <p style={helpStyle}>This takes a few seconds.</p>
@@ -263,7 +367,7 @@ export function SignalConfig() {
         </section>
       )}
 
-      {step === 4 && (
+      {step === 5 && (
         <section>
           <h1 style={h1Style}>Review your signals</h1>
           <p style={helpStyle}>
@@ -309,17 +413,17 @@ export function SignalConfig() {
             </div>
           ))}
           <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-            <button style={secondaryBtn} onClick={() => setStep(3)}>
+            <button style={secondaryBtn} onClick={() => setStep(4)}>
               Back
             </button>
-            <button style={primaryBtn} onClick={() => setStep(5)}>
+            <button style={primaryBtn} onClick={() => setStep(6)}>
               Next
             </button>
           </div>
         </section>
       )}
 
-      {step === 5 && (
+      {step === 6 && (
         <section>
           <h1 style={h1Style}>Ready to save?</h1>
           <p style={helpStyle}>
@@ -328,7 +432,7 @@ export function SignalConfig() {
           </p>
           {error && <div style={errorStyle}>{error}</div>}
           <div style={{ marginTop: 16, display: "flex", gap: 8 }}>
-            <button style={secondaryBtn} onClick={() => setStep(4)}>
+            <button style={secondaryBtn} onClick={() => setStep(5)}>
               Back
             </button>
             <button style={primaryBtn} disabled={loading} onClick={handleConfirm}>

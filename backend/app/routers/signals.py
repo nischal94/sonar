@@ -25,6 +25,7 @@ from app.prompts.propose_signals import (
     SYSTEM_PROMPT,
     build_user_message,
 )
+from app.prompts import log_prompt_call
 
 router = APIRouter(prefix="/workspace/signals", tags=["signals"])
 
@@ -90,6 +91,13 @@ async def propose_signals(
     db.add(event)
     await db.commit()
     await db.refresh(event)
+
+    log_prompt_call(
+        feature="propose_signals",
+        prompt_version=PROMPT_VERSION,
+        model=OPENAI_MODEL_EXPENSIVE,
+        workspace_id=str(current_user.workspace_id),
+    )
 
     return ProposeSignalsResponse(
         proposal_event_id=event.id,

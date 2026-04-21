@@ -4,43 +4,43 @@
 
 ---
 
-## Next Session Action Plan (last rewritten 2026-04-20, end of session 8)
+## Next Session Action Plan (last rewritten 2026-04-21, end of session 10)
 
-**State at resume:** `main` HEAD = `481f299` (check with `git log -1`). Tests: 136 backend pass. CI green on `main`. Working tree clean. **PR #114 open** on branch `eval/calibration-v1` with the calibration harness + findings — needs review + merge before session-9 work starts.
+**State at resume:** Branch `feat/phase-2-6-migrations` HEAD = `583154b`. Tests: 186 backend pass. Working tree clean. **PR [#119](https://github.com/nischal94/sonar/pull/119) open** with 17 commits implementing Phase 2.6 Tasks 1–8 plus the #120 blocker fix. Task 9 (operational) is the only pending piece.
 
-### 1. ✅ Review + merge PR #114 (calibration findings)
+### 1. 🔬 Manual browser walkthrough of the 6-step wizard
 
-**What:** Read `eval/calibration/findings-dogfood-martech.md` and `eval/calibration/phase-2.6-evidence.md` on PR #114. If the interpretation holds up, merge. Close issue #106 ("threshold calibration") as superseded by #113 ("matching model not viable — Phase 2.6 required") — reference #113 in the close comment.
-**Why now:** The calibration evidence is currently only on a feature branch. Every subsequent decision depends on it being canonical in `main`. Keeping it unmerged risks losing it or losing the thread.
-**Blocks:** Item 2 (Phase 2.6 brainstorm should reference the merged evidence, not a PR branch).
-**Effort:** 15–30 min (read, merge, close #106).
+**What:** `docker compose up -d frontend && open http://localhost:5173/signals/setup`. Walk all 6 steps: enter "What do you sell?" → **new ICP review step 3** appears showing extracted ICP + seller_mirror → edit each field → proceed to signal generation → accept/reject signals → save. Check browser devtools network tab for `/profile/extract` (returns icp + seller_mirror) and `/profile/update-icp` (fires only if user edited). Take a screenshot for the PR merge record.
+**Why now:** Per CLAUDE.md lessons learned, frontend changes require a human in the browser; `npm run build` proves the bundle compiles, not that React rendering works at runtime. This is the last gate before Task 9's calibration run.
+**Blocks:** Item 2 (calibration run needs confirmed working ICP extraction flow) and item 3 (PR merge).
+**Effort:** 10–15 min.
 
-### 2. 🧭 Phase 2.6 — Fit × Intent scoring design brainstorm (the central session-9 activity)
+### 2. 🎯 Task 9 — run Phase 2.6 calibration + decide flag flip
 
-**What:** Run `superpowers:brainstorming` with the problem framed per issue #113: "design a Fit × Intent hybrid scoring model for Sonar that fixes the failure modes in `eval/calibration/phase-2.6-evidence.md`." Produce `docs/phase-2-6/design.md` covering: the fit-encoder choice (BGE / E5 / OpenAI 3-large with asymmetric prompts), per-connection `fit_score` schema + inputs (headline + company + role vs. ICP profile), how to capture ICP disqualifiers (competitors, vendors in same category), how to combine with intent (multiplicative vs additive), persistence-of-prior-signals (Bayesian bump across posts from same high-intent author), calibration plan (re-use `backend/scripts/calibrate_matching.py`, same 30-post dogfood dataset as "before/after" baseline).
-**Why now:** This is the single most important open question for the product. The calibration proved the current primitive cannot ship. Every other Phase 2 item (Discovery) and Phase 3 item (real-time, CRM, team) depends on matching being meaningful. Nothing matters more than getting this right.
-**Blocks:** Phase 2 Discovery, all Phase 3 work, any launch plan.
-**Effort:** Full session for brainstorming + design doc. Implementation is another 2–3 sessions after.
+**What:** For both Dwao and CleverTap workspaces: extract ICP via `/profile/extract`, run `python scripts/backfill_fit_scores.py --workspace-id <uuid>`, then `python scripts/calibrate_matching.py analyze-hybrid --workspace-id <uuid> --labels eval/calibration/<dataset>.md --lambdas 0.0,0.1,0.2,0.3,0.5,0.7,1.0`. For CleverTap, re-label the same 30-post dogfood dataset under the CleverTap lens first (~15 min). Pick the winning λ that satisfies DoD on BOTH workspaces: P@5 ≥ 0.6, Recall@5 ≥ 0.5, zero top-5 competitors. Document findings at `eval/calibration/phase-2-6-findings.md`.
+**Why now:** This is the ship/don't-ship gate for Phase 2.6. The implementation is shippable code; whether it actually improves matching is an empirical question only calibration answers. If DoD fails, see design.md §5 step 8 for diagnostic paths (encoder upgrade, prompt tightening, retrieval-model swap).
+**Blocks:** flag flip on dogfood workspace. PR #119 can merge independently of calibration outcome, but the flag flip is the operational goal.
+**Effort:** 1–2 hours (ICP extraction × 2 workspaces, backfill × 2, analyze-hybrid × 2, CleverTap re-label, write findings).
 
-### 3. 🔒 Hardening: issues #107 + #108 (do before first external user)
+### 3. 🚀 Merge PR #119 + flip the flag for dogfood workspace
 
-**#107 — CORS service-worker routing.** Route extension fetches through the background service worker (whose origin is `chrome-extension://<id>`, already allowed). Remove `https://www.linkedin.com` from `app/main.py` `allow_origins`. Closes the `/auth/token` response-read exposure the session-7 CORS widening created. **Effort:** ~1 hour.
+**What:** After items 1 + 2 pass, merge PR #119 to main. Then `UPDATE workspaces SET use_hybrid_scoring = TRUE WHERE id = '<Dwao_uuid>';`. Monitor `/dashboard` output and delivered alerts for 1–2 weeks against the session-8 calibration baseline.
+**Why now:** The Phase 2.6 code is inert until the flag flips. The rollout design is per-workspace so rollback is a single SQL flip.
+**Effort:** 5 min to merge + flip. 1–2 weeks monitoring.
 
-**#108 — Apify token to `Authorization` header.** Move from URL query param (`?token=apify_api_...`) to `Authorization: Bearer` header in `app/services/apify.py`. Verify harvestapi accepts header auth. Stops the plaintext-token leak into every worker log line. **Effort:** ~30 minutes.
+### 4. 🛠 Address Phase 2.6 follow-up issues (any time, low-to-medium effort)
 
-**Why now:** Both are security-adjacent and small. Best done in one commit *before* any external user signs up. Not blocked on Phase 2.6 — can ship in parallel or in a gap between brainstorm and implementation.
+- [#121](https://github.com/nischal94/sonar/issues/121) — log `PROMPT_VERSION` on every LLM call. Systemic tech debt; also affects the existing `extract_capability_profile`.
+- [#122](https://github.com/nischal94/sonar/issues/122) — wizard: split `icpEdited` into per-field dirty flags (avoid redundant re-embed on unchanged field). UX polish.
+- [#123](https://github.com/nischal94/sonar/issues/123) — pipeline race on `connection.fit_score` cache. Idempotent outcome; low priority until traffic scales.
+- [#124](https://github.com/nischal94/sonar/issues/124) — add `workspace.hybrid_lambda` column if Task 9 picks λ ≠ 0.3. Close as "no action needed" if Task 9 picks 0.3.
 
-### 4. 🛠 Small quality fixes (any time, low effort)
+Also deferred from session 8: [#107](https://github.com/nischal94/sonar/issues/107) CORS service-worker routing, [#108](https://github.com/nischal94/sonar/issues/108) Apify token to Authorization header, [#110](https://github.com/nischal94/sonar/issues/110) Ring 1 dead, [#111](https://github.com/nischal94/sonar/issues/111) dashboard slider default. None block Phase 2.6.
 
-- **#110 — Ring 1 dead.** Signals are full phrases; Ring 1 does literal substring match; produces zero hits. Partially overlaps with Phase 2.6 (may disappear if Phase 2.6 reshapes what a "signal" is). Decide in Phase 2.6 design whether to fix standalone or fold in.
-- **#111 — Dashboard slider default (0.65) ignores workspace `matching_threshold`.** Small frontend fix: pass the workspace's stored threshold on initial render. ~30 minutes. Not urgent.
-- **Dogfood DB cleanup (per PR #112 body).** Run `UPDATE connections SET relationship_score = NULL WHERE relationship_score = 0.5 AND NOT has_interacted;` on the dogfood workspace to let the fixed scorer see correct values. Already done in session 8; noted here in case a fresh environment is restored from a snapshot.
-
-### 5. 🧭 Phase 2 Discovery (DEFERRED until Phase 2.6 ships)
+### 5. 🧭 Phase 2 Discovery (DEFERRED until Phase 2.6 DoD passes)
 
 **What:** Ring 3 nightly HDBSCAN clustering for emerging topics + Weekly Digest Email. Per `docs/phase-2/design.md §4.4`.
-**Why not now:** Clustering posts by the current matching signal clusters noise (F1 = 0.27). Discovery is building on sand until Phase 2.6 lands.
-**When to revisit:** After Phase 2.6 ships *and* re-calibration against the dogfood dataset produces F1 ≥ 0.6.
+**When to revisit:** After Task 9 DoD passes AND the flag has been stable for 2+ weeks on the dogfood workspace. Clustering the current matching signal clusters noise; Discovery is building on sand until 2.6 lands.
 **Effort:** Multi-session when it's time.
 
 ### 6. 🚧 Pre-launch tier (gates before first external paying customer — NOT next-session work)
@@ -49,9 +49,7 @@ Tracked so they don't surprise:
 - **PII/GDPR:** data retention policy + export + deletion endpoints. Not started.
 - **Observability:** structlog + Sentry + Prometheus + split `/health/live` vs `/ready` + DB backup/restore drill. Not started.
 - **LLM eval harness:** activates once `signal_proposal_events` has ~100+ real completions.
-- **Frontend dep bumps:** React 18→19, Vite 6→8, react-router-dom 6→7. Tracked in #40. Requires human in browser — plan a dedicated half-day.
-
-None of these belong in session 9; all gate first external customer.
+- **Frontend dep bumps:** React 18→19, Vite 6→8, react-router-dom 6→7. Tracked in [#40](https://github.com/nischal94/sonar/issues/40). Requires human in browser — plan a dedicated half-day.
 
 ---
 
@@ -136,6 +134,21 @@ Run `superpowers:brainstorming` with "scope Phase 3 of Sonar — real-time alert
 ---
 
 ## Session log (newest first, terse; full forensics live in git commits + PR descriptions)
+
+### Session 10 — 2026-04-21 — Phase 2.6 implementation shipped (Tasks 1–8) + #120 blocker fix
+
+- **Open:** [PR #119](https://github.com/nischal94/sonar/pull/119) — 17 commits on `feat/phase-2-6-migrations`, 186 tests green. Implements all 8 code tasks from `docs/phase-2-6/implementation.md`: 3 migrations + ORM updates, ICP + seller_mirror prompt module, fit_scorer service, extended `/profile/extract`, pipeline branch on `use_hybrid_scoring`, one-shot backfill script, wizard ICP review step + `/profile/update-icp`, `analyze-hybrid` calibration subcommand.
+- **Discipline:** every task through `superpowers:subagent-driven-development` with two-stage review (spec + quality). Reviews caught 1 blocking (Task 1 SQL injection in test), 6 important findings, multiple nice-to-haves — all addressed inline or deferred with rationale.
+- **Closed:** [#120](https://github.com/nischal94/sonar/issues/120) — Phase 2.6 merge blocker (delivery formatters rendering `relationship_score=0.0` as "Relationship: 0%"). Migration 011 makes the column nullable; hybrid pipeline path passes None; Slack/Telegram/email render "Relationship: N/A (hybrid scoring)".
+- **Filed for follow-up:** [#121](https://github.com/nischal94/sonar/issues/121) PROMPT_VERSION logging systemic gap, [#122](https://github.com/nischal94/sonar/issues/122) wizard per-field dirty flags, [#123](https://github.com/nischal94/sonar/issues/123) pipeline fit_score race (idempotent), [#124](https://github.com/nischal94/sonar/issues/124) lambda storage pending Task 9 calibration.
+- **Task 9 still pending** — operational: run `analyze-hybrid` for Dwao + CleverTap against the session-8 labeled dataset, pick winning λ, flip `use_hybrid_scoring=True` only if DoD passes on both workspaces. Manual browser walkthrough of the 6-step wizard also required before merge.
+
+### Session 9 — 2026-04-20/21 — Phase 2.6 design doc written + first review
+
+- **Merged:** [PR #114](https://github.com/nischal94/sonar/pull/114) — calibration harness + findings + Phase 2.6 evidence pool. Closed [#106](https://github.com/nischal94/sonar/issues/106) as superseded by [#113](https://github.com/nischal94/sonar/issues/113).
+- **Committed:** `14cc237` Phase 2.6 design proposal (Fit × Intent hybrid scoring), `0d390e7` revision after first review. `docs/phase-2-6/design.md` covers contrastive ICP phrasing with explicit anti-examples, a subtractive seller-mirror term with λ sweep (promoted from Plan B to v1 after review), multiplicative `fit × intent` combine, three DoD constraints (P@5 ≥ 0.6, Recall ≥ 0.5, zero top-5 competitor leakage), feature-flag rollout.
+- **Design retractions from first review:** Dropped the earlier concern that CleverTap calibration would be weaker because the labeler doesn't work there. That was confused product thinking — the labeler's domain knowledge is what matters, employment is irrelevant. CleverTap remains a full dual-profile DoD.
+- **Implementation plan written:** `docs/phase-2-6/implementation.md` — 9 tasks with bite-sized TDD steps, exact code snippets, commit messages. Task 9 is operational (flag flip + retire legacy).
 
 ### Session 8 — 2026-04-20 — Login page, scorer fix, and the calibration finding that reshaped Phase 2
 
