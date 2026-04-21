@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from app.config import OPENAI_MODEL_EXPENSIVE
 from app.services.llm import llm_client, LLMProvider
 from app.prompts import extract_icp_and_seller_mirror as icp_prompt
+from app.prompts import log_prompt_call
 
 PROFILE_EXTRACTION_PROMPT = """
 Analyze this company's website/document to build a sales intelligence capability profile.
@@ -115,4 +116,9 @@ async def extract_icp_and_seller_mirror(
         raise ValueError(
             f"[profile_extractor] ICP response missing required keys. Got: {list(parsed.keys())}"
         )
+    log_prompt_call(
+        feature="extract_icp_and_seller_mirror",
+        prompt_version=icp_prompt.PROMPT_VERSION,
+        model=OPENAI_MODEL_EXPENSIVE,
+    )
     return parsed["icp"], parsed["seller_mirror"]
