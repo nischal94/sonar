@@ -20,6 +20,11 @@ class EmailSender:
         )
         subject = f"{priority_emoji} Sonar Signal — {alert.opportunity_type.replace('_', ' ').title()}"
 
+        relationship_segment = (
+            f"Relationship: {alert.relationship_score:.0%} | "
+            if alert.relationship_score is not None
+            else ""
+        )
         html = f"""
         <h2>{priority_emoji} {alert.priority.upper()} SIGNAL</h2>
         <p><strong>Why it matches:</strong><br>{alert.match_reason}</p>
@@ -30,8 +35,7 @@ class EmailSender:
         <hr>
         <p>
             Scores — Relevance: {alert.relevance_score:.0%} |
-            Relationship: {alert.relationship_score:.0%} |
-            Timing: {alert.timing_score:.0%} |
+            {relationship_segment}Timing: {alert.timing_score:.0%} |
             Combined: {alert.combined_score:.0%}
         </p>
         """

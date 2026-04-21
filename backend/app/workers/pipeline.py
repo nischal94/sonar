@@ -356,12 +356,17 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
             )
 
         # Stage 10: Create alert
+        # In the hybrid path, relationship_score is not used — the degree
+        # filter lives on the dashboard.  Store NULL so formatters can omit
+        # the field instead of rendering a misleading "Relationship: 0%".
         alert = Alert(
             workspace_id=workspace_id,
             post_id=post_id,
             connection_id=post.connection_id,
             relevance_score=scoring.relevance_score,
-            relationship_score=scoring.relationship_score,
+            relationship_score=None
+            if workspace.use_hybrid_scoring
+            else scoring.relationship_score,
             timing_score=scoring.timing_score,
             combined_score=scoring.combined_score,
             priority=scoring.priority.value,
