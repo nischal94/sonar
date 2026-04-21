@@ -420,6 +420,112 @@ Hard minimum across all tiers: **10 targets.**
 
 ---
 
+## 12. Design specifications (from `/plan-design-review`)
+
+Initial design-completeness rating: 4/10. Post-fix: 8/10. Classifier: **APP UI** (workspace-driven, data-dense). App UI rules apply: calm surface hierarchy, dense but readable, utility language, minimal chrome.
+
+### 12.1 Information hierarchy
+
+**Wizard step 4 (scrape progress):**
+1. Primary: large progress counter `187 / 500 scraped · ~4 min to first alert`
+2. Secondary: live-updating list of just-scraped targets (fade-in per row) — `Scraped: Jane Doe (Acme) · 12 new posts`
+3. Tertiary: "Add more targets" dismissable secondary button
+
+**Dashboard (Target Activity):**
+1. Primary: sort selector (default "Intent this week" = sum of `final_score` over last 7 days)
+2. Secondary: scrape-health banner when failure rate ≥ 20% in last 24h (dismissable per day)
+3. Core: ranked target table (not card grid) — dense rows, expand-on-click shows 3 most recent scored posts
+4. Right rail: segment-tag filters (JSONB `@>` query)
+
+**CRM sync OAuth flow:** present both Salesforce and HubSpot as equal-weight choices if both detected; Sonar infers likely integration from the user's email domain (`@salesforce.com` or CRM cookies) but does not auto-pick.
+
+### 12.2 Interaction state specifications
+
+```
+SURFACE               | LOADING              | EMPTY                                    | ERROR                      | PARTIAL
+----------------------|-----------------------|------------------------------------------|----------------------------|---------------------------------
+Wizard step 3         | disabled submit +     | "Paste 10+ LinkedIn URLs to start"       | inline per-URL red error   | "8 of 10 URLs valid. Fix 2 reds
+ (target paste)       | button spinner        | with example syntax hint                 | directly under textarea    |  or continue without them?"
+Wizard step 4         | "Analyzing your       | n/a                                       | banner: "Scrape paused     | counter + live target feed
+ (scrape progress)    | targets..." + count   |                                           |  (Apify rate limit).       | continues. If mid-loop failure:
+                      |                       |                                           |  Resuming in 2m."          | show "18 skipped — review later"
+Dashboard             | skeleton rows ×5      | "No activity yet. Your 47 targets will   | "Daily scrape failed for   | "72 targets scraped · 18 still
+ (Target Activity)    | (first load only)     |  produce alerts as they post. Check back  |  18 of 47 targets."        |  pending. Dashboard will update
+                      |                       |  in ~4 hours." + secondary "Add more"     | banner — yellow if <50%    |  as they complete."
+                      |                       |                                           | failed, red if >50%        |
+Warm-intro annotation | n/a (server-rendered) | absence of annotation row = no warm       | silently omit on lookup    | `Warm: 1 · Jane Smith` if only
+                      |                       | connection found (not "0 connections")    | failure (fail open)        |  one match
+Target list mgmt      | skeleton rows         | "No targets yet. Import from CRM or       | row-level error badge      | delete with undo toast (5s)
+                      |                       |  paste URLs." + two primary CTAs          |                            |
+CRM sync OAuth        | "Redirecting to       | n/a                                       | "Couldn't connect to       | "Pulled 142 of 148
+                      | Salesforce..."        |                                           |  Salesforce. [Retry]"      |  opportunities"
+Scrape-health banner  | n/a                   | n/a (only shows when issue)              | "Review failed targets"    | severity-color-coded (yellow
+                      |                       |                                           | CTA drills in              |  = 20-50% failed, red = >50%)
+```
+
+### 12.3 Emotional arc intentionality
+
+Two moments need deliberate design, not defaults:
+
+**Step 4 — magic moment:** Live-streaming scrape progress (fade-in per target) transforms "4 minutes of dead air" into "work visibly happening." ETA is honest ("~4 min" with uncertainty, not "4:00" precise). If Apify rate-limits mid-scrape, say so in the banner rather than fake progress. This is the difference between demo-that-wows and demo-that-doesn't.
+
+**First alert — novelty announcement:** The first Slack/email alert a workspace receives opens with "Your first Sonar alert" header, one-time only. Subsequent alerts use the standard format. Don't hide the novelty of the product actually working.
+
+### 12.4 Visual language (App UI rules applied)
+
+- **Dashboard uses table layout, not card grid.** Dense rows. Score as a numeric column (not a badge pill). Expand-on-click for the 3 recent posts. Right rail for segment filters.
+- **Warm-intro annotation is a small text label, not an emoji.** `Warm: 2 · Jane Smith, Raj Patel` in monospace-ish typography on a neutral background. No flame emoji. No badge-ish styling. The data is the point.
+- **Scrape progress is a left-aligned status feed, not a centered hero.** Utility language: `Scraped: Jane Doe (Acme) · 12 new posts`. Not "We're analyzing your targets for buying intent 🚀".
+- **No card grids for sections.** No 3-column icon-in-circle patterns. No decorative gradients. App UI classifier means calm surface hierarchy.
+
+### 12.5 Responsive + a11y (minimum viable)
+
+- **Mobile layout rules:**
+  - Target list: table on ≥768px, stacked cards on mobile
+  - Dashboard segment filters: right rail on desktop, top bar modal on mobile
+  - Wizard: inherits Phase 2.6 pattern (already mobile-friendly)
+  - Scrape progress: fluid width, counter bigger on mobile (primary info)
+- **Keyboard nav:**
+  - Dashboard target row = focusable. Enter to expand. ↑↓ to navigate rows.
+  - Segment filters = checkbox group with proper labels
+  - Wizard steps: already pattern-matches Phase 2.6
+- **Screen readers:**
+  - Alert cards: `role="article"`, `aria-labelledby` on target name
+  - Warm-intro annotation: `aria-label="Warm connection: Jane Smith knows this person"`
+  - Scrape-health banner: `role="status"` (polite) or `role="alert"` (assertive, for red-severity)
+- **Color contrast:** scrape-health banner red-on-white text must be ≥ 4.5:1 (WCAG AA). Test before ship.
+- **Touch targets:** expandable row tap zone ≥ 44px. Segment filter checkboxes ≥ 44px.
+
+### 12.6 Pre-implementation prerequisite: DESIGN.md
+
+Sonar has no `docs/DESIGN.md`. Phase 2.6 shipped with ad-hoc styling; Phase 3 is the natural moment to introduce a design system document so each new surface doesn't invent its own language.
+
+**Action:** Before the first Phase 3 frontend commit lands, run `/design-consultation` to produce `docs/DESIGN.md` capturing: color tokens, typography scale, spacing, layout grid, card vs. row conventions, semantic color mapping (error/warn/ok/info). Adds ~half a day; pays off immediately on the 7 new surfaces Phase 3 introduces.
+
+Not blocking the design doc approval. Blocking the first frontend PR.
+
+### 12.7 Design decisions resolved (committed to plan)
+
+| # | Decision | Resolution |
+|---|---|---|
+| D1 | Dashboard layout — table or cards? | **Table.** App UI classifier; data-dense; cards would be AI-slop pattern. |
+| D2 | Default sort on dashboard | **"Intent this week"** = `SUM(final_score) OVER last 7 days`. |
+| D3 | Warm-intro annotation style | **Text label** (`Warm: 2 · Jane Smith`), not emoji; App UI rules. |
+| D4 | Step 4 ETA display | **Show with uncertainty** (`~4 min to first alert`), not hidden, not precise. |
+| D5 | Empty dashboard copy | "No activity yet. Your N targets will produce alerts as they post. Check back in ~4 hours." |
+| D6 | DESIGN.md needed before implementation? | **Yes** — run `/design-consultation` as §12.6 prereq. |
+| D7 | First-alert UX treatment | One-time "Your first Sonar alert" header on first delivered alert per workspace. |
+
+### 12.8 Approved mockups
+
+None generated in this review (design-board interactive flow deferred given session context). When the implementer picks up wizard step 4 and the dashboard redesign, generate mockup variants via `/design-shotgun` for those two surfaces before writing React. Specifically:
+- **Mockup target 1:** Wizard step 4 (scrape progress) — 3 variants emphasizing different primary-info hierarchy
+- **Mockup target 2:** Dashboard "Target Activity" table with warm-intro annotations, scrape-health banner, segment filter rail — 3 variants
+
+Warm-intro annotation, CRM sync, and transitional banners can use direct HTML implementation without mockup iteration (simple enough, App UI patterns).
+
+---
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
@@ -427,7 +533,7 @@ Hard minimum across all tiers: **10 targets.**
 | CEO Review | `/plan-ceo-review` | Scope & strategy | 1 | CLEAR (SELECTIVE EXPANSION) | 6 decisions closed: §11.1 people-only v3.0, §11.2 tiered list sizing (10 min/25–100 typical, tier-gated), §11.3 four-lever cost model (48h cadence/10 posts/dormant throttle/tier pricing), §11.4a CRM sync promoted to v3.0, §11.4b warm-intro 1st-degree lookup promoted to v3.0, §11.5a Slack bot deferred to v3.1 |
 | Codex Review | `/codex review` | Independent 2nd opinion | 1 | ISSUES_FOUND → all addressed | 8 adversarial findings; 4 mechanical fixed in-doc; 1 scope-honesty fix (§3.3 scoring engine rewrite acknowledged, 8-12 week estimate); 3 strategic closed via CEO review |
 | Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | CLEAR (after design revisions) | 12 issues across Architecture (6) + Code Quality (3) + Performance (3); 2 critical failure-mode gaps surfaced; all 12 addressed inline |
-| Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | Recommended before wizard + dashboard implementation — Phase 3 extends the 6-step wizard to 7 steps and rebuilds the dashboard from "People List" to "Target Activity" |
+| Design Review | `/plan-design-review` | UI/UX gaps | 1 | CLEAR (8 surfaces specified) | Initial rating 4/10 → 8/10 after fixes. 7 design decisions committed (§12.7). APP UI classifier applied — table layout not cards, text labels not emoji, utility language, no AI-slop patterns. Interaction states table added (§12.2). Emotional-arc intentionality added for scrape-progress + first-alert (§12.3). Responsive + a11y minimums added (§12.5). **Prereq flagged:** run `/design-consultation` to produce `docs/DESIGN.md` before first Phase 3 frontend PR. Mockup generation deferred to implementation time via `/design-shotgun` for wizard step 4 + dashboard. |
 | DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | N/A — internal product, not developer-facing |
 
 **ENG REVIEW FINDINGS ADDRESSED:**
@@ -447,7 +553,7 @@ Hard minimum across all tiers: **10 targets.**
 - Silent workspace-level scrape failure → dashboard banner + weekly digest prompt + on-call metric (§7 risk #7)
 - DoD re-validation on target-scraped data distribution → hard gate before flag flip, explicit calibration redo (§8 success criterion #4 + §9 item 13)
 
-**VERDICT:** CEO + ENG + CODEX all CLEARED. **Ready for `superpowers:writing-plans`.**
+**VERDICT:** CEO + ENG + CODEX + DESIGN all CLEARED. **Ready for `superpowers:writing-plans`.**
 
 **UNRESOLVED:** none. 6 product-shape decisions closed via CEO review (SELECTIVE EXPANSION mode):
 1. People-only v3.0 (companies v3.1)
