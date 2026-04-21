@@ -34,7 +34,9 @@ Every decision below is the product-shape call that defines this phase. Open que
 
 ### 3.1 Target list is the onboarding primitive
 
-Workspace owners paste or upload a list of LinkedIn profile URLs (people) and/or company-page URLs. Initial minimum: 100 entries; typical: 200–500; upper bound: 2000. Each target has a type (`person` vs `company`), a normalized LinkedIn URL, and optional metadata (segment tag, priority score, source system).
+Workspace owners paste or upload a list of LinkedIn profile URLs (people) and/or company-page URLs. Each target has a type (`person` vs `company`), a normalized LinkedIn URL, and optional metadata (segment tags, source system).
+
+**Identity canonicalization (required, not optional):** LinkedIn URLs come in many shapes — `linkedin.com/in/jane-doe`, `linkedin.com/in/jane-doe/`, `www.linkedin.com/in/jane-doe?utm_source=x`, `m.linkedin.com/in/jane-doe`, public-profile URLs with numeric `pub/` variants, etc. Without a deterministic canonicalization, `(workspace_id, linkedin_url)` dedup silently fails. The codebase already has precedent: `app/services/apify.py::canonicalize_profile_url()` + `tests/test_apify_url_canonicalization.py`. The `targets` table enforces `UNIQUE (workspace_id, linkedin_url)` on the CANONICAL form. Input goes through the same canonicalizer before insert. If the canonicalizer yields the same form for `/in/jane-doe` and `/in/jane-doe/`, dedup works; if not, we have duplicates. Extend the existing canonicalization module to cover `/company/` slugs, numeric `pub/` profile ids, and localized `linkedin.com/in/jane-doe?locale=de_DE` variants — regression tests are required with the v3.0 migration.
 
 **Why:** This is the shape every enterprise ABM tool uses (6sense, Demandbase, Clay, Common Room). It matches how B2B sales teams already work — they have a named account list. Pasting that list is a task the user can complete in 5 minutes; the alternative ("install extension, log in, wait for feed to refresh") takes longer and requires more trust.
 
@@ -50,15 +52,33 @@ A Celery beat task runs per-workspace daily (configurable: every 4h for high-tie
 
 **Why daily:** matches the intent-signal decay window (a post older than 48h is rarely actionable outbound; a post older than 7 days is cold). Faster cadence costs more and adds little value. Slower cadence misses the window. Tunable per workspace if someone wants realtime + pays for it.
 
-**Legal posture:** *HiQ Labs v. LinkedIn* (9th Circuit, 2022) provides a defense for accessing **public profile data**; the Supreme Court declined cert. However, LinkedIn's Terms of Service prohibit automated access at scale, and the 2024 *hiQ* remand addressed breach-of-contract claims separately from CFAA. We are not scraping private feed content, not logged in as the user, not bypassing a paywall — but we are automating access to public data. Apify's proxy-rotation + stealth infrastructure carries most of the operational risk. Enterprise customers who require cleaner posture can run BYO-Apify in their own AWS account (design target for v3.1 enterprise tier). Real legal review is a pre-enterprise-contract gate, not a v3.0 blocker.
+**Legal posture — core company dependency, not an enterprise-tier issue:** *HiQ Labs v. LinkedIn* (9th Circuit, 2022) provides a defense for accessing **public profile data**; the Supreme Court declined cert. However, LinkedIn's Terms of Service prohibit automated access at scale, and the 2024 *hiQ* remand addressed breach-of-contract claims separately from CFAA. We are not scraping private feed content, not logged in as the user, not bypassing a paywall — but we are automating access to public data.
 
-### 3.3 Scoring engine unchanged from Phase 2.6
+If LinkedIn tightens technical enforcement (CAPTCHA, device fingerprinting, IP reputation), Apify's proxy-rotation + stealth infrastructure is the first line of defense but not infinite. If LinkedIn tightens legal enforcement (TOS cease-and-desist aimed at Sonar specifically), every tier breaks, not just enterprise — target scraping is the core ingest architecture. This is a company-risk, not a contract-risk.
 
-The `fit_scorer` service, `extract_icp_and_seller_mirror` prompt, pipeline hybrid branch, and `/profile/update-icp` endpoint all carry forward 1:1. The only difference is the ingest pathway that feeds posts into the pipeline.
+**Mitigations built into v3.0, not deferred:**
+- **Scraper abstraction** (§3.2): `IntentSource` Protocol lets us swap Apify for Bright Data / Harvest API / self-hosted Playwright in 1–2 weeks without touching scoring code
+- **Multi-surface redundancy from v3.1:** X/Twitter, job postings, news — no single surface is load-bearing
+- **Fallback to user-initiated-only extension (v3.2's overlay role)** if full server-side scraping becomes untenable — the product degrades gracefully rather than dies
+- Real legal review before first public launch (not before first enterprise contract)
+- Monitor LinkedIn anti-scraping moves as an ongoing risk signal, not a one-time check
 
-**Why:** Phase 2.6 was deliberately architected to be ingest-agnostic. The `_run_pipeline` function takes a `post_id` and a `workspace_id`; it does not care whether the post was captured by the extension or by an Apify scrape. Every invariant of Phase 2.6 (ICP + seller_mirror embeddings on `capability_profile_versions`, `connection.fit_score` caching, multiplicative `fit × intent` combine, feature-flag rollout) applies identically to target-scraped posts.
+### 3.3 Scoring math unchanged from Phase 2.6 — but the pipeline around it needs work
 
-**What this lets us do:** ship Phase 3 without rewriting any scoring code. The migration is purely in ingest + onboarding + dashboard.
+**Honest scope correction** (surfaced by adversarial review of this design doc's v2 draft): the claim "scoring engine unchanged" in an earlier version was an overclaim. The Phase 2.6 `fit_scorer` module (`compute_fit_score`, `compute_intent_score`, `compute_hybrid_score`) is pure and ingest-agnostic and carries forward 1:1. But the pipeline that WRAPS the scorer is connection-native end-to-end:
+
+- `scorer.py` derives `relationship_score` from `connection.degree` → in hybrid mode relationship is zeroed, but the code still loads the Connection
+- `alert.connection_id` is a `NOT NULL` foreign key → target-sourced alerts have no connection, so the column must become nullable (migration) and a parallel `alert.target_id` column must be added
+- `context_generator.py` reads `connection.name`, `connection.headline`, `connection.company`, `connection.degree` → must accept either a Connection or a Target
+- Dashboard aggregation (`person_signal_summary`, `incremental_trending.py`) is keyed by `connection_id` → needs a sibling `target_signal_summary` path
+- Feedback loop (`SignalEffectiveness`) references alerts keyed by connection → same nullable treatment
+- `_run_pipeline` takes `post_id` + `workspace_id` and internally loads the Connection at `post.connection_id` → must branch on `post.source` and load Target instead when `source='target_scrape'`
+
+**What's actually reusable 1:1:** the pure math (`fit_scorer.py`, the ICP + seller_mirror prompt, `compute_combined_score` for the legacy fallback path), the delivery channels, the auth/multi-tenant layer, the wizard frontend structure.
+
+**What needs a real rewrite:** alert schema (new nullable column, new FK), `context_generator` (polymorphic input), dashboard aggregation (new entity path), pipeline scoring section (branch on source to load either Connection or Target).
+
+**Revised implementation estimate:** Phase 3 v3.0 is 8–12 weeks of engineering (not 6–8 as the earlier draft claimed). The bulk is the alert + context-generator + dashboard rewrite, not the ingest pipeline itself.
 
 ### 3.4 Targets are a new first-class entity
 
@@ -105,15 +125,24 @@ CREATE INDEX idx_targets_fit_stale ON targets (workspace_id, fit_score_computed_
 -- Migration 014 — posts.source discriminator + posts.target_id
 ALTER TABLE posts ADD COLUMN target_id UUID REFERENCES targets(id) ON DELETE SET NULL;
 ALTER TABLE posts ADD COLUMN source post_source NOT NULL DEFAULT 'extension';
+
+-- Migration 014b — loosen the existing (workspace_id, linkedin_post_id) unique
+-- constraint so the same LinkedIn post can exist once per source during the
+-- v3.0/v3.1 coexist window. Reverse after v3.2 when extension writes stop.
+ALTER TABLE posts DROP CONSTRAINT posts_workspace_id_linkedin_post_id_key;
+ALTER TABLE posts ADD CONSTRAINT posts_workspace_id_linkedin_post_id_source_key
+  UNIQUE (workspace_id, linkedin_post_id, source);
 ```
 
-Every ingest path stamps `posts.source`, giving us forever-traceable provenance. Machine-readable `scrape_failure_code` feeds dashboard banners; `scrape_failure_reason` is free-text for debugging specific failures.
+Every ingest path stamps `posts.source`, giving us forever-traceable provenance. The `(workspace_id, linkedin_post_id, source)` unique replaces the previous two-column unique so a post captured BOTH by the user's extension AND by the target-scrape pipeline produces two provenance rows rather than one source silently winning. Dashboard aggregation treats them as a single logical post (see §4 query sketch); the dedup happens at read time, not write time. Post-v3.2 when extension writes stop, migration 015 restores the original two-column unique.
 
-**Fit score invalidation:** `fit_score_computed_at` tracks cache freshness. A nightly Celery task flags targets as stale when ANY of:
-- The workspace's active `capability_profile_version.created_at > target.fit_score_computed_at` (ICP changed)
-- `target.last_scraped_at > target.fit_score_computed_at` (target's headline/company drifted since last score)
+Machine-readable `scrape_failure_code` feeds dashboard banners; `scrape_failure_reason` is free-text for debugging specific failures.
 
-Stale targets recompute fit_score on next pipeline pass.
+**Fit score invalidation:** `fit_score_computed_at` tracks cache freshness. Naively using `last_scraped_at > fit_score_computed_at` would fire on every successful scrape (scraping updates `last_scraped_at` unconditionally), so fit_score would never cache. Correct triggers are:
+- The workspace's active `capability_profile_version.created_at > target.fit_score_computed_at` (ICP or seller_mirror changed server-side)
+- `target.identity_changed_at > target.fit_score_computed_at` — a separate column bumped only when the scraper detects a drift in `headline` or `company` vs the stored values (not on every scrape)
+
+Stale targets recompute fit_score on next pipeline pass. Add `identity_changed_at TIMESTAMPTZ` to the `targets` schema alongside `fit_score_computed_at`; scraper compares incoming headline/company to stored values and bumps the column on change only.
 
 **Dual-entity precedence (target AND connection match same linkedin_id):** targets win. A target representing deliberate user intent beats an incidental connection-graph presence. When a workspace adds a target whose `linkedin_id` matches an existing connection, a migration-trigger copies `connection.fit_score → target.fit_score` and nulls the connection's; the pipeline then reads from `target.fit_score` only. During v3.0/v3.1 coexist (both ingest paths active), pipeline branches on `post.source`: `target_scrape` reads target, `extension` reads connection. Post-v3.2, `connection.fit_score` drops in migration 015.
 
@@ -309,12 +338,56 @@ Each step is scoped to one PR. The full implementation plan (bite-sized TDD task
 
 ---
 
+## 11. Open strategic decisions (raised by codex adversarial review, need product-owner call)
+
+These are not engineering problems with a "right" answer. They are product-shape decisions that affect scope, pricing, and go-to-market. Resolve before `superpowers:writing-plans`.
+
+### 11.1 People vs. company monitoring for v3.0 — pick one or build both?
+
+The current design folds both into a unified `targets` table with `type='person'|'company'`. Codex argues this doubles scope before proving either:
+- **Person-post monitoring** maps to outbound cadence (sales rep reaches out when a prospect posts about pain)
+- **Company-page monitoring** maps to account awareness (marketing tracks competitor moves, account reps track named-account news)
+- Different workflows, different scoring semantics, different dashboard layouts
+
+**Options:**
+- **A) Ship people-only in v3.0**, add companies in v3.1. Narrower, faster, proves one use case cleanly.
+- **B) Ship companies-only in v3.0**, add people in v3.1. Companies are a more common ABM pattern but less differentiated (6sense already does it).
+- **C) Ship both, accept the scope hit** — as the current draft proposes.
+
+**Recommendation: A.** Sonar's Phase 2.6 scoring logic (ICP + seller_mirror) is built around people. People-first v3.0 lets the scoring engine move 1:1; company-page semantics are legitimately different and deserve their own scoring pass in v3.1.
+
+### 11.2 Minimum viable target list size — 10 or 100?
+
+Current draft: 100 minimum, 200–500 typical. Codex argues this is scrape-economics thinking, not buyer thinking. Early paying users often have a must-win list of 10–20 accounts, not 500.
+
+**Options:**
+- **A) Keep 100 minimum** — optimized for scoring signal quality and scrape economics.
+- **B) Drop to 10 minimum, recommend 25–100** — optimized for early-adopter fit. Lower target list = higher ratio of signal-to-noise per post, may make DoD easier to hit anyway.
+- **C) Tier it:** free = 10–25, paid = 100+, enterprise = unlimited.
+
+**Recommendation: B.** Matches who actually signs up to a pre-revenue tool. Lower minimum also means lower Apify cost per workspace, which helps finding 11.3.
+
+### 11.3 Cost model — $50/workspace/week criterion doesn't close at 500-target daily cadence
+
+Math check: 500 targets × 20 posts/target/day × 7 days × $0.001/post = **$70/week**. Already over the stated $50/week criterion BEFORE adding retries, empty-profile fetches, embeddings, LLM context generation, and delivery.
+
+**Options:**
+- **A) Lower scrape cadence to every 48h** for free/mid tier — halves COGS, alert latency doubles from ~24h to ~48h
+- **B) Lower posts-per-target to 10** (from 20) — halves COGS, risk missing older-but-active posts. 10 recent posts per target is probably enough to catch intent within the 48h actionable window anyway.
+- **C) Filter dormant targets** — if a target hasn't posted in 30 days, reduce their scrape frequency to weekly automatically. Big win for ABM lists full of quiet VPs.
+- **D) Raise the $50 ceiling to $100/workspace/week** — reprice tiers accordingly.
+- **E) All four** — each is cheap, stack them.
+
+**Recommendation: E.** Each of A/B/C alone is borderline; stacking them gets well under $50/week with comfortable margin.
+
+---
+
 ## GSTACK REVIEW REPORT
 
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
-| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | — |
-| Codex Review | `/codex review` | Independent 2nd opinion | 0 | — | — |
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | Recommended next — strategic decisions in §11 want product-owner input |
+| Codex Review | `/codex review` | Independent 2nd opinion | 1 | ISSUES_FOUND → partially addressed | 8 adversarial findings; 4 mechanical fixed in-doc (#2 invalidation logic, #3 coexist unique key, #5 legal framing tightened, #8 canonicalization spec); 1 scope-honesty fix (#1 scoring engine rewrite acknowledged); 3 strategic surfaced in §11 for product-owner decision (#4 cost model, #6 person/company, #7 min list size) |
 | Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | CLEAR (after design revisions) | 12 issues found across Architecture (6) + Code Quality (3) + Performance (3); 2 critical failure-mode gaps surfaced; all 12 addressed inline in this revision |
 | Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | — |
 | DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | — |
@@ -336,6 +409,11 @@ Each step is scoped to one PR. The full implementation plan (bite-sized TDD task
 - Silent workspace-level scrape failure → dashboard banner + weekly digest prompt + on-call metric (§7 risk #7)
 - DoD re-validation on target-scraped data distribution → hard gate before flag flip, explicit calibration redo (§8 success criterion #4 + §9 item 13)
 
-**VERDICT:** ENG CLEARED — ready for `/codex review` or `superpowers:writing-plans`. Design doc v2 (post-revision) is the version to review externally.
+**VERDICT:** ENG CLEARED, CODEX ISSUES PARTIALLY ADDRESSED — **3 strategic decisions in §11 block `superpowers:writing-plans`** (people vs company scope, minimum target-list size, cost-model tier calibration). After those three calls are made, design doc is ready for implementation planning.
 
-**UNRESOLVED:** none within eng review scope. Outstanding strategic question (whether Path A is the right pivot at all) is CEO-review territory — explicitly recommended as optional next step.
+**UNRESOLVED:**
+- §11.1: people-only vs companies-only vs both for v3.0 — product-owner call
+- §11.2: minimum target-list size floor — product-owner call
+- §11.3: Apify cost tier + scrape-cadence policy — product-owner call
+
+**Recommended next:** `/plan-ceo-review docs/phase-3/design.md` to close the three §11 open decisions in one pass. Alternative: direct user response on each of §11.1/11.2/11.3, then writing-plans.
