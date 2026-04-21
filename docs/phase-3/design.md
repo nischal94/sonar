@@ -241,7 +241,7 @@ User pastes target list ─► targets ─┤
 
 ## 5. Non-goals (explicitly deferred)
 
-- **Network-scoped signals (1st/2nd/3rd degree).** The user's LinkedIn graph is no longer the scoping primitive. If we want "warm intros through mutual connections," that's a v3.4+ feature built on top of targets (e.g., "among your connections, who can intro to this target?").
+- **Full network-graph scoping (1st/2nd/3rd degree) as a scoring primitive.** The user's LinkedIn graph is no longer the scope axis — target-list is. BUT: a narrow 1st-degree lookup at alert-time (the "warm intro" feature in §11.4b) IS in v3.0 scope, giving back the highest-value part of the network story without rebuilding the graph scoring.
 - **Real-time feed observation.** No browser-side observation. If the user wants "what's happening RIGHT NOW on LinkedIn," they open LinkedIn; Sonar operates on a daily cadence.
 - **User's LinkedIn cookie storage.** Never. The pivot's whole point is eliminating this vector.
 - **Team / multi-user workspace mode.** Still single-user-per-workspace for v3.0. Team mode is v4 territory.
@@ -313,17 +313,20 @@ Not the full plan — just the slicing shape. Each step ships as its own PR with
 4. **Batch embedding optimization** — before any scrape-heavy task runs, verify `embedding_provider.embed_batch(texts)` exists and is used in `scrape_targets_daily.py`. 10k posts per workspace per day × 1 API call per post = 10k API calls; batched at 2048/call = 5 calls. ~100× cost + latency win. Do this BEFORE the beat task, not after.
 5. `app/workers/scrape_targets_daily.py` — Celery beat task with `hash(workspace_id) % 86400` dispatch offset; processes one workspace at a time; `scrape_failure_code` tracking per target; emits `target_scrape_success_ratio` metric per workspace
 6. Pipeline extension — when `posts.source='target_scrape'`, use `target.fit_score`. When `'extension'`, use legacy `connection.fit_score`. Dual-entity precedence rule per §3.4 (target wins over connection on linkedin_id match).
-7. `fit_score_computed_at` invalidation Celery task — nightly pass flags targets where `active_profile_version.created_at > fit_score_computed_at` OR `last_scraped_at > fit_score_computed_at`
-8. Wizard steps 3 + 4 — target paste/upload UI + scrape progress view
-9. Dashboard redesign — ranked target activity + segment-tags drill-in (jsonb `@>` filter) + workspace scrape-health banner (red when >50% targets failed in last 24h)
-10. CSV import script + `POST /workspace/targets/csv-upload` endpoint
-11. Extension deprecation banner in frontend + onboarding skip-extension flow
-12. Post-embedding retention: weekly Celery task nullifies `posts.embedding` for rows older than 90 days, row retained for history
-13. Calibration redo (HARD GATE) — generate a labeled target-scraped dataset for Dwao + CleverTap, rerun `analyze-hybrid`, validate DoD holds on the new data distribution. No flag flip without this.
-14. v3.0 launch gate: flip `workspace.use_target_based_ingest=TRUE` per workspace after successful onboarding; monitor for 2 weeks before default-on
-15. Migration 015 (post-v3.2, after extension capture disabled) — drop `connections.fit_score` column; `targets.fit_score` is the sole source of truth
+7. **Warm-intro lookup (§11.4b)** — new `target_1st_degree_cache` table populated by the Apify scrape. Alert-construction time: check `connections WHERE workspace_id = :ws AND linkedin_id IN (...)`. Annotate alert with "🔥 N of your connections know this person — [names]." Reuses existing `connections` table; no writes to it.
+8. `fit_score_computed_at` invalidation Celery task — nightly pass flags targets where `active_profile_version.created_at > fit_score_computed_at` OR `target.identity_changed_at > fit_score_computed_at`
+9. Wizard steps 3 + 4 — target paste/upload UI + scrape progress view. v3.0 accepts person-targets only (per §11.1); validator rejects `/company/` URLs with a clear "companies coming in v3.1" message.
+10. Dashboard redesign — ranked target activity + segment-tags drill-in (jsonb `@>` filter) + workspace scrape-health banner (red when >50% targets failed in last 24h) + warm-intro annotations on alerts
+11. CSV import script + `POST /workspace/targets/csv-upload` endpoint
+12. **CRM sync (§11.4a)** — Salesforce + HubSpot OAuth flow, pull Accounts filtered by opportunity-stage + their key contacts, convert to person-targets, daily resync, delta-aware (adds as CRM stages advance). ~2 weeks.
+13. Extension deprecation banner in frontend + onboarding skip-extension flow
+14. Post-embedding retention: weekly Celery task nullifies `posts.embedding` for rows older than 90 days, row retained for history
+15. **Tier gating** — enforce per-tier target-list size caps from §11.2 (Free=25, Starter=100, Pro=500, Enterprise=unlimited) + per-tier scrape cadence from §11.3
+16. Calibration redo (HARD GATE) — generate a labeled target-scraped dataset for Dwao + CleverTap, rerun `analyze-hybrid`, validate DoD holds on the new data distribution. No flag flip without this.
+17. v3.0 launch gate: flip `workspace.use_target_based_ingest=TRUE` per workspace after successful onboarding; monitor for 2 weeks before default-on
+18. Migration 015 (post-v3.2, after extension capture disabled) — drop `connections.fit_score` column; `targets.fit_score` is the sole source of truth
 
-Then v3.1 (CRM sync, priority queueing tiers), v3.2 (extension deprecation + migration 015), v3.3 (extension-as-overlay or removal).
+Then v3.1 (company-page targets + native Slack bot + priority queueing), v3.2 (extension deprecation + migration 015), v3.3 (extension-as-overlay or removal), v3.4+ (multi-surface: X/Twitter, news, job postings).
 
 Each step is scoped to one PR. The full implementation plan (bite-sized TDD tasks, exact code snippets, commit messages) is the output of the `superpowers:writing-plans` invocation that follows this design's approval.
 
@@ -338,47 +341,82 @@ Each step is scoped to one PR. The full implementation plan (bite-sized TDD task
 
 ---
 
-## 11. Open strategic decisions (raised by codex adversarial review, need product-owner call)
+## 11. Strategic decisions — CLOSED
 
-These are not engineering problems with a "right" answer. They are product-shape decisions that affect scope, pricing, and go-to-market. Resolve before `superpowers:writing-plans`.
+These were open after codex adversarial review. Closed via `/plan-ceo-review` (session 10, 2026-04-21). Recorded here so the rationale survives.
 
-### 11.1 People vs. company monitoring for v3.0 — pick one or build both?
+### 11.1 People vs. company monitoring for v3.0 — DECIDED: people-only
 
-The current design folds both into a unified `targets` table with `type='person'|'company'`. Codex argues this doubles scope before proving either:
-- **Person-post monitoring** maps to outbound cadence (sales rep reaches out when a prospect posts about pain)
-- **Company-page monitoring** maps to account awareness (marketing tracks competitor moves, account reps track named-account news)
-- Different workflows, different scoring semantics, different dashboard layouts
+**Decision:** v3.0 ships **person-targets only.** Company-page targets deferred to v3.1.
 
-**Options:**
-- **A) Ship people-only in v3.0**, add companies in v3.1. Narrower, faster, proves one use case cleanly.
-- **B) Ship companies-only in v3.0**, add people in v3.1. Companies are a more common ABM pattern but less differentiated (6sense already does it).
-- **C) Ship both, accept the scope hit** — as the current draft proposes.
+**Why:**
+- Phase 2.6 scoring (ICP + seller_mirror) is built around characterizing human buyers, not company metadata. Moving it 1:1 is only possible on person-targets.
+- "Sales rep gets alerted when their prospect posts about pain" is a concrete, demo-able user story. Company-page monitoring is legitimately different scoring (account-level signal aggregation) and deserves its own design pass.
+- Shipping both in v3.0 doubles scope before proving either.
+- Codex adversarial review flagged this as overbuilt.
 
-**Recommendation: A.** Sonar's Phase 2.6 scoring logic (ICP + seller_mirror) is built around people. People-first v3.0 lets the scoring engine move 1:1; company-page semantics are legitimately different and deserve their own scoring pass in v3.1.
+**v3.0 implication:** `targets.type` column still exists as an ENUM (`person` | `company`) but the v3.0 release only accepts `person` rows. The `company` path ships in v3.1 with dedicated company-scoring semantics. The schema being forward-compatible avoids a future migration.
 
-### 11.2 Minimum viable target list size — 10 or 100?
+### 11.2 Minimum viable target list size — DECIDED: 10 min / 25–100 typical, tier-gated
 
-Current draft: 100 minimum, 200–500 typical. Codex argues this is scrape-economics thinking, not buyer thinking. Early paying users often have a must-win list of 10–20 accounts, not 500.
+**Decision:** Drop the 100-URL floor. Target-list sizing is:
+- **Free tier:** 25 targets max
+- **Starter tier ($99/mo):** 100 targets max
+- **Pro tier (TBD pricing):** 500 targets max
+- **Enterprise tier (TBD pricing):** unlimited
 
-**Options:**
-- **A) Keep 100 minimum** — optimized for scoring signal quality and scrape economics.
-- **B) Drop to 10 minimum, recommend 25–100** — optimized for early-adopter fit. Lower target list = higher ratio of signal-to-noise per post, may make DoD easier to hit anyway.
-- **C) Tier it:** free = 10–25, paid = 100+, enterprise = unlimited.
+Hard minimum across all tiers: **10 targets.**
 
-**Recommendation: B.** Matches who actually signs up to a pre-revenue tool. Lower minimum also means lower Apify cost per workspace, which helps finding 11.3.
+**Why:**
+- Early paying users (solo founders, early-stage sales reps, founder-led sales) have a must-win list of 10–30 accounts, not 500. Optimizing the floor for scrape economics excludes the actual first-10-customer persona.
+- Lower target-list sizes mean higher signal-to-noise per post (the user picked these targets deliberately; they're already pre-filtered for relevance). DoD thresholds may actually pass more easily at low list sizes.
+- Tier-gating list size upward, rather than flooring it, preserves COGS margin and creates natural upsell pressure.
+- Codex flagged this as "scrape-economics thinking, not buyer thinking."
 
-### 11.3 Cost model — $50/workspace/week criterion doesn't close at 500-target daily cadence
+### 11.3 Cost model — DECIDED: stack all four levers
 
-Math check: 500 targets × 20 posts/target/day × 7 days × $0.001/post = **$70/week**. Already over the stated $50/week criterion BEFORE adding retries, empty-profile fetches, embeddings, LLM context generation, and delivery.
+**Decision:** Apply all of A+B+C+D below. Each alone is borderline; together they yield comfortable margin.
 
-**Options:**
-- **A) Lower scrape cadence to every 48h** for free/mid tier — halves COGS, alert latency doubles from ~24h to ~48h
-- **B) Lower posts-per-target to 10** (from 20) — halves COGS, risk missing older-but-active posts. 10 recent posts per target is probably enough to catch intent within the 48h actionable window anyway.
-- **C) Filter dormant targets** — if a target hasn't posted in 30 days, reduce their scrape frequency to weekly automatically. Big win for ABM lists full of quiet VPs.
-- **D) Raise the $50 ceiling to $100/workspace/week** — reprice tiers accordingly.
-- **E) All four** — each is cheap, stack them.
+- **A — Cadence tiers:** Free/Starter = every 48h. Pro = daily. Enterprise = every 4h.
+- **B — Posts-per-target:** Default 10 (not 20). Enterprise tier bumps to 20.
+- **C — Dormant-target auto-throttle:** If a target hasn't posted in 30 days, auto-drop to weekly scrape cadence. Bumps back to tier-default when they post again.
+- **D — Pricing-tier calibration:** Starter $99/mo at 100 targets × 48h cadence × 10 posts ≈ 2100 posts/week ≈ $2.10/week Apify COGS ≈ **98% gross margin**. Pro and Enterprise sized similarly to preserve 90%+ margin.
 
-**Recommendation: E.** Each of A/B/C alone is borderline; stacking them gets well under $50/week with comfortable margin.
+**Why stack:**
+- Cadence alone halves COGS but adds alert latency
+- Posts-per-target alone risks missing longer-tail intent
+- Dormant-throttle alone helps ABM lists but not active-posters
+- Together, free/starter tier costs pennies per workspace per week; dashboard can expose "bump to Pro for 24h cadence" as a natural upsell
+
+**Replaces §8 success criterion #5:** "Weekly Apify cost ≤ $50/workspace at a 500-target list with daily cadence" is rewritten to per-tier budgets — Starter ≤ $5/wk, Pro ≤ $25/wk, Enterprise ≤ $150/wk.
+
+---
+
+### 11.4 Scope expansions ACCEPTED into v3.0 (from SELECTIVE EXPANSION cherry-picks)
+
+**4a. CRM target-list sync — promoted from v3.1 to v3.0**
+
+**Decision:** Salesforce + HubSpot opportunity-list sync ships in v3.0.
+
+**Why:** Without it, v3.0 onboarding is "paste URLs manually." With it, onboarding is "click Sync, your Open Opportunity stage becomes your target list." This is the difference between a demo that wows and a demo that doesn't. Enterprise buyers don't pay $500/mo without it. Early Starter-tier users with fewer than 25 opportunities also benefit — "import from my HubSpot dashboard" beats "paste 10 URLs."
+
+**Scope:** OAuth flow for Salesforce and HubSpot. On connect: pull Accounts (filtered by opportunity-stage) and their key contacts. Convert each to a person-target (v3.0 is people-only). Resync daily. Add new targets as the CRM's opportunity stage advances.
+
+**Effort:** ~2 weeks. Salesforce/HubSpot OAuth + contact-pull is a well-known pattern; Sonar's existing Apify Protocol gives the integration seam.
+
+**4b. "Warm intro" degree-1 lookup — promoted to v3.0**
+
+**Decision:** When a target post scores above the alert threshold, check whether any of the workspace's existing `connections` (from the extension's legacy ingest or from CRM sync) have a 1st-degree relationship with the target's LinkedIn profile. If yes, annotate the alert: "🔥 2 of your connections know this person — [Name 1, Name 2] — ask for an intro?"
+
+**Why:** This is the one thing Phase 3 was going to lose that you specifically worried about — the "network magic." Bringing back a narrow 1st-degree lookup at alert-time restores 70% of the network value at ~5% of the extension's attack-surface cost. This is the cheapest differentiation move we can make in v3.0.
+
+**Scope:** One query at alert-construction time. Reuses the existing `connections` table — `SELECT name FROM connections WHERE workspace_id = :ws AND linkedin_id IN (SELECT mutual_ids FROM target_1st_degree_cache WHERE target_id = :tid)`. Needs a `target_1st_degree_cache` table populated as a side-effect of Apify's scrape (Apify returns the target's 1st-degree connections when scraping a public profile).
+
+**Effort:** ~1 week. One new table, one alert-side enrichment.
+
+### 11.5 Scope expansions DEFERRED to v3.1+
+
+**5a. Native Slack bot** — user invokes `/sonar add target <url>`, `/sonar snooze <target>`, `/sonar brief` from inside Slack instead of the dashboard. Useful but not load-bearing for v3.0. Deferred to v3.1.
 
 ---
 
@@ -386,11 +424,11 @@ Math check: 500 targets × 20 posts/target/day × 7 days × $0.001/post = **$70/
 
 | Review | Trigger | Why | Runs | Status | Findings |
 |--------|---------|-----|------|--------|----------|
-| CEO Review | `/plan-ceo-review` | Scope & strategy | 0 | — | Recommended next — strategic decisions in §11 want product-owner input |
-| Codex Review | `/codex review` | Independent 2nd opinion | 1 | ISSUES_FOUND → partially addressed | 8 adversarial findings; 4 mechanical fixed in-doc (#2 invalidation logic, #3 coexist unique key, #5 legal framing tightened, #8 canonicalization spec); 1 scope-honesty fix (#1 scoring engine rewrite acknowledged); 3 strategic surfaced in §11 for product-owner decision (#4 cost model, #6 person/company, #7 min list size) |
-| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | CLEAR (after design revisions) | 12 issues found across Architecture (6) + Code Quality (3) + Performance (3); 2 critical failure-mode gaps surfaced; all 12 addressed inline in this revision |
-| Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | — |
-| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | — |
+| CEO Review | `/plan-ceo-review` | Scope & strategy | 1 | CLEAR (SELECTIVE EXPANSION) | 6 decisions closed: §11.1 people-only v3.0, §11.2 tiered list sizing (10 min/25–100 typical, tier-gated), §11.3 four-lever cost model (48h cadence/10 posts/dormant throttle/tier pricing), §11.4a CRM sync promoted to v3.0, §11.4b warm-intro 1st-degree lookup promoted to v3.0, §11.5a Slack bot deferred to v3.1 |
+| Codex Review | `/codex review` | Independent 2nd opinion | 1 | ISSUES_FOUND → all addressed | 8 adversarial findings; 4 mechanical fixed in-doc; 1 scope-honesty fix (§3.3 scoring engine rewrite acknowledged, 8-12 week estimate); 3 strategic closed via CEO review |
+| Eng Review | `/plan-eng-review` | Architecture & tests (required) | 1 | CLEAR (after design revisions) | 12 issues across Architecture (6) + Code Quality (3) + Performance (3); 2 critical failure-mode gaps surfaced; all 12 addressed inline |
+| Design Review | `/plan-design-review` | UI/UX gaps | 0 | — | Recommended before wizard + dashboard implementation — Phase 3 extends the 6-step wizard to 7 steps and rebuilds the dashboard from "People List" to "Target Activity" |
+| DX Review | `/plan-devex-review` | Developer experience gaps | 0 | — | N/A — internal product, not developer-facing |
 
 **ENG REVIEW FINDINGS ADDRESSED:**
 - 1A/1E: fit_score precedence during coexist + drop `connections.fit_score` post-v3.2 (§3.4 + §9 item 15)
@@ -409,11 +447,21 @@ Math check: 500 targets × 20 posts/target/day × 7 days × $0.001/post = **$70/
 - Silent workspace-level scrape failure → dashboard banner + weekly digest prompt + on-call metric (§7 risk #7)
 - DoD re-validation on target-scraped data distribution → hard gate before flag flip, explicit calibration redo (§8 success criterion #4 + §9 item 13)
 
-**VERDICT:** ENG CLEARED, CODEX ISSUES PARTIALLY ADDRESSED — **3 strategic decisions in §11 block `superpowers:writing-plans`** (people vs company scope, minimum target-list size, cost-model tier calibration). After those three calls are made, design doc is ready for implementation planning.
+**VERDICT:** CEO + ENG + CODEX all CLEARED. **Ready for `superpowers:writing-plans`.**
 
-**UNRESOLVED:**
-- §11.1: people-only vs companies-only vs both for v3.0 — product-owner call
-- §11.2: minimum target-list size floor — product-owner call
-- §11.3: Apify cost tier + scrape-cadence policy — product-owner call
+**UNRESOLVED:** none. 6 product-shape decisions closed via CEO review (SELECTIVE EXPANSION mode):
+1. People-only v3.0 (companies v3.1)
+2. Tiered list sizing (10 min across tiers; caps 25/100/500/unlimited)
+3. Four-lever cost model (48h cadence free/starter + 10 posts default + dormant auto-throttle + tier pricing)
+4. CRM sync (Salesforce + HubSpot) promoted from v3.1 to v3.0
+5. Warm-intro degree-1 lookup promoted to v3.0 (partial network-value recovery)
+6. Native Slack bot deferred to v3.1
 
-**Recommended next:** `/plan-ceo-review docs/phase-3/design.md` to close the three §11 open decisions in one pass. Alternative: direct user response on each of §11.1/11.2/11.3, then writing-plans.
+**Recommended next:**
+1. `/plan-design-review docs/phase-3/design.md` — the wizard extension (6 → 7 steps) and dashboard redesign (People List → Target Activity) both need design intentionality before implementation
+2. `superpowers:writing-plans docs/phase-3/design.md` — after design review, produce the bite-sized TDD implementation plan (similar shape to `docs/phase-2-6/implementation.md`)
+
+**Pre-implementation prerequisites** (codified in §10 + Sonar's CLAUDE.md):
+- `pg_dump` dogfood DB snapshot before first Phase 3 migration lands
+- `/careful` umbrella on every Phase 3 implementation session
+- Design doc v3 (this version) is the canonical artifact — no further rounds of review needed unless the user wants /plan-design-review next
