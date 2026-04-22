@@ -1,4 +1,4 @@
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 # Create non-root user (UID 1000) early so subsequent dir creation can chown
 # directly to it. Resolves Trivy DS-0002 (containers must specify USER).
