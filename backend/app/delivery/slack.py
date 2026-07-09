@@ -20,30 +20,51 @@ class SlackSender:
         blocks = [
             {
                 "type": "header",
-                "text": {"type": "plain_text", "text": f"{emoji} {alert.priority.upper()} SIGNAL"}
-            },
-            {
-                "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*Why it matches:*\n{alert.match_reason}"}
+                "text": {
+                    "type": "plain_text",
+                    "text": f"{emoji} {alert.priority.upper()} SIGNAL",
+                },
             },
             {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": (
-                        f"Relevance: `{_score_bar(alert.relevance_score)}` {alert.relevance_score:.0%}\n"
-                        f"Relationship: `{_score_bar(alert.relationship_score)}` {alert.relationship_score:.0%}\n"
-                        f"Timing: `{_score_bar(alert.timing_score)}` {alert.timing_score:.0%}"
-                    )
-                }
+                    "text": f"*Why it matches:*\n{alert.match_reason}",
+                },
             },
             {
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*Draft A (Direct):*\n_{alert.outreach_draft_a}_"}
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "\n".join(
+                        filter(
+                            None,
+                            [
+                                f"Relevance: `{_score_bar(alert.relevance_score)}` {alert.relevance_score:.0%}",
+                                (
+                                    f"Relationship: `{_score_bar(alert.relationship_score)}` {alert.relationship_score:.0%}"
+                                    if alert.relationship_score is not None
+                                    else None
+                                ),
+                                f"Timing: `{_score_bar(alert.timing_score)}` {alert.timing_score:.0%}",
+                            ],
+                        )
+                    ),
+                },
             },
             {
                 "type": "section",
-                "text": {"type": "mrkdwn", "text": f"*Draft B (Question):*\n_{alert.outreach_draft_b}_"}
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Draft A (Direct):*\n_{alert.outreach_draft_a}_",
+                },
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Draft B (Question):*\n_{alert.outreach_draft_b}_",
+                },
             },
             {
                 "type": "actions",
@@ -52,15 +73,15 @@ class SlackSender:
                         "type": "button",
                         "text": {"type": "plain_text", "text": "✓ Acted"},
                         "action_id": f"acted_{alert.id}",
-                        "style": "primary"
+                        "style": "primary",
                     },
                     {
                         "type": "button",
                         "text": {"type": "plain_text", "text": "✗ Not Relevant"},
-                        "action_id": f"irrelevant_{alert.id}"
-                    }
-                ]
-            }
+                        "action_id": f"irrelevant_{alert.id}",
+                    },
+                ],
+            },
         ]
 
         async with httpx.AsyncClient() as client:

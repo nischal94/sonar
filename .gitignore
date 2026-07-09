@@ -21,6 +21,11 @@ htmlcov/
 # should never be committed).
 celerybeat-schedule
 
+# DB snapshots (pg_dump output taken before multi-migration phases for
+# local recovery). May contain PII; local safety only. See CLAUDE.md
+# "Snapshot the dogfood DB before any multi-migration phase."
+snapshots/
+
 # Node / Extension
 node_modules/
 dist/

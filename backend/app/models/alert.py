@@ -4,6 +4,7 @@ from app.models._types import TIMESTAMPTZ
 import uuid
 from app.database import Base
 
+
 class Alert(Base):
     __tablename__ = "alerts"
 
@@ -12,7 +13,7 @@ class Alert(Base):
     post_id = Column(UUID(as_uuid=True), nullable=False)
     connection_id = Column(UUID(as_uuid=True), nullable=False)
     relevance_score = Column(Float, nullable=False)
-    relationship_score = Column(Float, nullable=False)
+    relationship_score = Column(Float, nullable=True)
     timing_score = Column(Float, nullable=False)
     combined_score = Column(Float, nullable=False)
     priority = Column(String, nullable=False)

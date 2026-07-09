@@ -15,6 +15,9 @@ class Workspace(Base):
     plan_tier = Column(String, nullable=False, default="starter")
     capability_profile = Column(Text)
     matching_threshold = Column(Float, nullable=False, default=0.72)
+    use_hybrid_scoring = Column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     scoring_weights = Column(
         JSONB, default=lambda: {"relevance": 0.50, "relationship": 0.30, "timing": 0.20}
     )
@@ -48,6 +51,10 @@ class CapabilityProfileVersion(Base):
     source = Column(String, nullable=False)
     signal_keywords = Column(ARRAY(Text))
     anti_keywords = Column(ARRAY(Text))
+    icp = Column(Text, nullable=True)
+    seller_mirror = Column(Text, nullable=True)
+    icp_embedding = Column(Vector(1536), nullable=True)
+    seller_mirror_embedding = Column(Vector(1536), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     performance_score = Column(Float)
     embedding = Column(Vector(1536))

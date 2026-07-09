@@ -10,7 +10,7 @@ def _score_bar(score: float, width: int = 10) -> str:
 
 def _escape_mdv2(text: str) -> str:
     """Escape special characters for Telegram MarkdownV2."""
-    return re.sub(r'([_*\[\]()~`>#+\-=|{}.!\\])', r'\\\1', text)
+    return re.sub(r"([_*\[\]()~`>#+\-=|{}.!\\])", r"\\\1", text)
 
 
 class TelegramSender:
@@ -25,22 +25,31 @@ class TelegramSender:
 
         emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(alert.priority, "⚪")
 
+        relationship_line = (
+            f"📊 Relationship: `{_score_bar(alert.relationship_score)}` {alert.relationship_score:.0%}\n"
+            if alert.relationship_score is not None
+            else ""
+        )
         text = (
             f"{emoji} *{alert.priority.upper()} SIGNAL*\n\n"
             f"🎯 *Why it matches:*\n{_escape_mdv2(alert.match_reason)}\n\n"
             f"📊 Relevance: `{_score_bar(alert.relevance_score)}` {alert.relevance_score:.0%}\n"
-            f"📊 Relationship: `{_score_bar(alert.relationship_score)}` {alert.relationship_score:.0%}\n"
+            f"{relationship_line}"
             f"📊 Timing: `{_score_bar(alert.timing_score)}` {alert.timing_score:.0%}\n\n"
             f"✉️ *Draft A \\(Direct\\):*\n_{_escape_mdv2(alert.outreach_draft_a)}_\n\n"
             f"✉️ *Draft B \\(Question\\):*\n_{_escape_mdv2(alert.outreach_draft_b)}_"
         )
 
-        keyboard = InlineKeyboardMarkup([
+        keyboard = InlineKeyboardMarkup(
             [
-                InlineKeyboardButton("✓ Acted", callback_data=f"acted_{alert.id}"),
-                InlineKeyboardButton("✗ Not Relevant", callback_data=f"irrelevant_{alert.id}")
+                [
+                    InlineKeyboardButton("✓ Acted", callback_data=f"acted_{alert.id}"),
+                    InlineKeyboardButton(
+                        "✗ Not Relevant", callback_data=f"irrelevant_{alert.id}"
+                    ),
+                ]
             ]
-        ])
+        )
 
         await self._bot.send_message(
             chat_id=chat_id,

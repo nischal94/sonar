@@ -62,7 +62,12 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
     from app.services.matcher import cosine_similarity
     from app.services.ring1_matcher import match_post_to_ring1_signals
     from app.services.ring2_matcher import match_post_embedding_to_ring2_signals
-    from app.services.scorer import compute_combined_score
+    from app.services.scorer import compute_combined_score, ScoringResult, Priority
+    from app.services.fit_scorer import (
+        compute_fit_score,
+        compute_intent_score,
+        compute_hybrid_score,
+    )
     from app.services.context_generator import generate_alert_context
     from app.services.keyword_filter import DEFAULT_BLOCKLIST
     from app.delivery.router import DeliveryRouter
@@ -199,13 +204,81 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
             await engine.dispose()
             return
 
-        scoring = compute_combined_score(
-            relevance_score=relevance_score,
-            connection=connection,
-            posted_at=post.posted_at or post.ingested_at,
-            weights=workspace.scoring_weights,
-            keyword_match_strength=keyword_match_strength,
-        )
+        if (
+            workspace.use_hybrid_scoring
+            and profile.icp_embedding is not None
+            and profile.seller_mirror_embedding is not None
+        ):
+            # Hybrid path. Populate connection.fit_score on first encounter.
+            if connection.fit_score is None:
+                text_for_embed = (
+                    f"{connection.headline or ''} {connection.company or ''}".strip()
+                )
+                if text_for_embed:
+                    conn_emb = await embedding_provider.embed(text_for_embed)
+                    # profile.icp_embedding and .seller_mirror_embedding come back as
+                    # pgvector objects; cast via list() so the fit_scorer sees Sequence[float].
+                    connection.fit_score = compute_fit_score(
+                        icp_embedding=list(profile.icp_embedding),
+                        seller_mirror_embedding=list(profile.seller_mirror_embedding),
+                        connection_embedding=conn_emb,
+                        lambda_=0.3,  # hardcoded; replace with workspace.hybrid_lambda after Task 9 calibration
+                    )
+                else:
+                    connection.fit_score = 0.0
+                await db.flush()
+
+            intent = compute_intent_score(
+                relevance_score=relevance_score,
+                posted_at=post.posted_at or post.ingested_at,
+            )
+            final = compute_hybrid_score(
+                fit_score=connection.fit_score,
+                intent_score=intent,
+            )
+
+            # Derive priority from the hybrid final score using the same
+            # thresholds as legacy scoring (0.80 high, 0.55 medium).
+            if final >= 0.80:
+                priority = Priority.HIGH
+            elif final >= 0.55:
+                priority = Priority.MEDIUM
+            else:
+                priority = Priority.LOW
+
+            # Timing is already folded into `intent`; surface the raw component
+            # for the legacy DB columns so dashboards/debugging still work.
+            posted = post.posted_at or post.ingested_at
+            if posted.tzinfo is None:
+                posted = posted.replace(tzinfo=timezone.utc)
+            hours_old = max(
+                0.0, (datetime.now(timezone.utc) - posted).total_seconds() / 3600.0
+            )
+            timing_component = max(0.0, 1.0 - hours_old / 24.0)
+
+            scoring = ScoringResult(
+                relevance_score=relevance_score,
+                relationship_score=0.0,  # not used in hybrid; degree filter lives on dashboard
+                timing_score=timing_component,
+                combined_score=final,
+                priority=priority,
+            )
+        else:
+            if workspace.use_hybrid_scoring:
+                logger.warning(
+                    "[pipeline] use_hybrid_scoring=True but ICP/seller_mirror embeddings missing "
+                    "for workspace_id=%s profile_id=%s — falling back to legacy scorer. "
+                    "Run /profile/extract then scripts/backfill_fit_scores.py to populate.",
+                    workspace_id,
+                    profile.id,
+                )
+            scoring = compute_combined_score(
+                relevance_score=relevance_score,
+                connection=connection,
+                posted_at=post.posted_at or post.ingested_at,
+                weights=workspace.scoring_weights,
+                keyword_match_strength=keyword_match_strength,
+            )
 
         threshold = workspace.matching_threshold or 0.72
         if scoring.combined_score < threshold:
@@ -283,12 +356,17 @@ async def _run_pipeline(post_id: UUID, workspace_id: UUID):
             )
 
         # Stage 10: Create alert
+        # In the hybrid path, relationship_score is not used — the degree
+        # filter lives on the dashboard.  Store NULL so formatters can omit
+        # the field instead of rendering a misleading "Relationship: 0%".
         alert = Alert(
             workspace_id=workspace_id,
             post_id=post_id,
             connection_id=post.connection_id,
             relevance_score=scoring.relevance_score,
-            relationship_score=scoring.relationship_score,
+            relationship_score=None
+            if workspace.use_hybrid_scoring
+            else scoring.relationship_score,
             timing_score=scoring.timing_score,
             combined_score=scoring.combined_score,
             priority=scoring.priority.value,

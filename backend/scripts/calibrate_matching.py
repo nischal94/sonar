@@ -269,6 +269,46 @@ def compute_metrics_at_threshold(
     }
 
 
+def precision_at_k(ranked: list[tuple[float, bool, bool]], k: int = 5) -> float:
+    """ranked: list of (score, is_match, is_competitor) sorted by score desc.
+    Returns matches_in_top_k / len(top_k)."""
+    top = ranked[:k]
+    if not top:
+        return 0.0
+    matches = sum(1 for _score, is_match, _comp in top if is_match)
+    return matches / len(top)
+
+
+def recall_at_k(ranked: list[tuple[float, bool, bool]], k: int = 5) -> float:
+    """Recall at k against all true matches in the dataset (not just top-k)."""
+    total_true = sum(1 for _score, is_match, _comp in ranked if is_match)
+    if total_true == 0:
+        return 0.0
+    top_true = sum(1 for _score, is_match, _comp in ranked[:k] if is_match)
+    return top_true / total_true
+
+
+def competitor_count_in_top_k(
+    ranked: list[tuple[float, bool, bool]], k: int = 5
+) -> int:
+    """Count competitor-flagged posts in top-k."""
+    return sum(1 for _score, _is_match, is_comp in ranked[:k] if is_comp)
+
+
+def load_competitor_set(competitors_path: Path | None) -> set[str]:
+    """Load a set of connection UUID strings from a newline-separated file.
+    Returns empty set if path is None. Ignores blank lines and # comments."""
+    if competitors_path is None:
+        return set()
+    out: set[str] = set()
+    for line in competitors_path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        out.add(line.lower())
+    return out
+
+
 def print_distribution(cosines: list[float], labels: list[bool]) -> None:
     match_cos = sorted([c for c, lb in zip(cosines, labels) if lb])
     nonmatch_cos = sorted([c for c, lb in zip(cosines, labels) if not lb])
@@ -416,6 +456,161 @@ async def cmd_analyze(workspace_id: UUID, labels_path: Path) -> None:
     )
 
 
+# ---------- Phase 3 — analyze-hybrid (λ sweep) ---------------------------
+
+
+async def cmd_analyze_hybrid(args) -> None:
+    from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+    from sqlalchemy import select
+    from app.config import get_settings
+    from app.models.workspace import CapabilityProfileVersion
+    from app.models.connection import Connection
+    from app.models.post import Post
+    from app.services.fit_scorer import (
+        compute_fit_score,
+        compute_intent_score,
+        compute_hybrid_score,
+        cosine_similarity,
+    )
+    from app.services.embedding import embedding_provider
+
+    labels_map = parse_labels(args.labels)  # {post_id: is_match}
+    if not labels_map:
+        print(f"[calibrate-hybrid] no labels parsed from {args.labels}")
+        sys.exit(1)
+
+    lambdas = [float(x) for x in args.lambdas.split(",")]
+    competitor_ids = load_competitor_set(args.competitors)
+
+    settings = get_settings()
+    engine = create_async_engine(settings.database_url)
+    Session = async_sessionmaker(engine, expire_on_commit=False)
+
+    async with Session() as db:
+        profile = (
+            await db.execute(
+                select(CapabilityProfileVersion)
+                .where(CapabilityProfileVersion.workspace_id == args.workspace_id)
+                .where(CapabilityProfileVersion.is_active.is_(True))
+            )
+        ).scalar_one_or_none()
+        if profile is None:
+            print(
+                f"[calibrate-hybrid] no active capability_profile_version for {args.workspace_id}"
+            )
+            sys.exit(1)
+        if profile.icp_embedding is None or profile.seller_mirror_embedding is None:
+            print(
+                "[calibrate-hybrid] active profile has no ICP/seller_mirror embeddings. "
+                "Run /profile/extract first."
+            )
+            sys.exit(1)
+
+        icp_emb = list(profile.icp_embedding)
+        mirror_emb = list(profile.seller_mirror_embedding)
+        cap_emb = list(profile.embedding) if profile.embedding is not None else None
+
+        # Fetch each labeled post joined with its connection + embedding text.
+        post_rows = (
+            await db.execute(
+                select(Post, Connection)
+                .join(Connection, Post.connection_id == Connection.id)
+                .where(Post.id.in_([UUID(pid) for pid in labels_map.keys()]))
+            )
+        ).all()
+
+        # Fetch post embeddings via raw SQL (pgvector cast to text, then json-parse).
+        import json
+        from sqlalchemy import text as sql_text
+
+        post_emb_rows = (
+            await db.execute(
+                sql_text(
+                    "SELECT id::text, embedding::text FROM posts WHERE id = ANY(:ids)"
+                ),
+                {"ids": list(labels_map.keys())},
+            )
+        ).all()
+        post_embs = {
+            pid: json.loads(emb_str) if emb_str else None
+            for pid, emb_str in post_emb_rows
+        }
+
+        # Embed each connection's headline+company exactly once.
+        conn_embs: dict[str, list[float]] = {}
+        for _post, conn in post_rows:
+            cid = str(conn.id)
+            if cid in conn_embs:
+                continue
+            text_for_embed = f"{conn.headline or ''} {conn.company or ''}".strip()
+            conn_embs[cid] = (
+                await embedding_provider.embed(text_for_embed)
+                if text_for_embed
+                else [0.0] * 1536
+            )
+
+        print(f"\n{'λ':>5} | {'P@5':>5} | {'R@5':>5} | {'comp@5':>6} | DoD?")
+        print("-" * 45)
+
+        best_lambda = None
+        for lam in lambdas:
+            ranked: list[tuple[float, bool, bool]] = []
+            top5_preview: list[
+                tuple[float, str, str, str]
+            ] = []  # (score, post_id, headline, company)
+
+            for post, conn in post_rows:
+                pid = str(post.id)
+                if pid not in labels_map:
+                    continue
+                post_emb = post_embs.get(pid)
+                if post_emb is None or cap_emb is None:
+                    continue
+                fit = compute_fit_score(
+                    icp_embedding=icp_emb,
+                    seller_mirror_embedding=mirror_emb,
+                    connection_embedding=conn_embs[str(conn.id)],
+                    lambda_=lam,
+                )
+                relevance = cosine_similarity(cap_emb, post_emb)
+                intent = compute_intent_score(
+                    relevance_score=relevance,
+                    posted_at=post.posted_at or post.ingested_at,
+                )
+                final = compute_hybrid_score(fit, intent)
+
+                is_match = labels_map[pid]
+                is_competitor = str(conn.id).lower() in competitor_ids
+                ranked.append((final, is_match, is_competitor))
+                top5_preview.append(
+                    (final, pid, conn.headline or "", conn.company or "")
+                )
+
+            ranked.sort(key=lambda x: -x[0])
+            top5_preview.sort(key=lambda x: -x[0])
+
+            p5 = precision_at_k(ranked, k=5)
+            r5 = recall_at_k(ranked, k=5)
+            comp5 = competitor_count_in_top_k(ranked, k=5)
+            dod = "YES" if (p5 >= 0.6 and r5 >= 0.5 and comp5 == 0) else "no"
+            print(f"{lam:>5.2f} | {p5:>5.2f} | {r5:>5.2f} | {comp5:>6d} | {dod}")
+
+            if dod == "YES" and best_lambda is None:
+                best_lambda = lam
+                # Show top-5 for visual competitor check at the winning λ
+                print(f"\n  top-5 at λ={lam}:")
+                for score, pid, headline, company in top5_preview[:5]:
+                    print(f"    {score:.3f}  {pid}  {headline[:60]}  @ {company[:40]}")
+
+        if best_lambda is None:
+            print(
+                "\n[calibrate-hybrid] no λ satisfied DoD (P@5 ≥ 0.6, R@5 ≥ 0.5, zero top-5 competitors)."
+            )
+            print("See design.md §5 step 8 for diagnostic paths.")
+
+    await engine.dispose()
+
+
 # ---------- main ---------------------------------------------------------
 
 
@@ -431,11 +626,39 @@ def main() -> None:
     an.add_argument("--workspace-id", type=UUID, required=True)
     an.add_argument("--labels", type=Path, required=True)
 
+    hy = subparsers.add_parser(
+        "analyze-hybrid", help="Sweep λ for Phase 2.6 hybrid scoring"
+    )
+    hy.add_argument("--workspace-id", type=UUID, required=True)
+    hy.add_argument(
+        "--labels",
+        type=Path,
+        required=True,
+        help="Labeled dataset file (same format as the existing analyze input)",
+    )
+    hy.add_argument(
+        "--lambdas",
+        type=str,
+        default="0.0,0.1,0.2,0.3,0.5,0.7,1.0",
+        help="Comma-separated λ values to sweep",
+    )
+    hy.add_argument(
+        "--competitors",
+        type=Path,
+        default=None,
+        help=(
+            "Optional: file with newline-separated connection UUIDs known to be competitors. "
+            "If provided, analyzer reports top-5 competitor leakage automatically."
+        ),
+    )
+
     args = parser.parse_args()
     if args.cmd == "export":
         asyncio.run(cmd_export(args.workspace_id, args.out))
     elif args.cmd == "analyze":
         asyncio.run(cmd_analyze(args.workspace_id, args.labels))
+    elif args.cmd == "analyze-hybrid":
+        asyncio.run(cmd_analyze_hybrid(args))
 
 
 if __name__ == "__main__":
